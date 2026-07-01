@@ -1,202 +1,347 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
+
+// Initialize Gemini API client
+// Fallback to OpenAI key if user put their Gemini key in the OpenAI slot, or use default placeholder
+const apiKey = process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'your-gemini-api-key-here'
+  ? process.env.GEMINI_API_KEY
+  : (process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.startsWith('sk-proj-6fV8ty') ? process.env.OPENAI_API_KEY : 'mock-api-key');
+
+const genAI = new GoogleGenerativeAI(apiKey);
 
 app.use(cors());
 app.use(express.json());
 
-// DATA MODELS
+// DATA MODELS & IN-MEMORY DATASTORES
 const patientsDB = {
   'P101': {
     id: 'P101',
     name: 'John Doe',
-    history: ['Diabetes', 'Hypertension']
+    history: ['Diabetes', 'Hypertension'],
+    mobile: '+91-9876543210'
   },
   'P102': {
     id: 'P102',
     name: 'Jane Smith',
-    history: ['Asthma', 'Allergies']
+    history: ['Asthma', 'Allergies'],
+    mobile: '+91-9876543211'
   },
   'P103': {
     id: 'P103',
     name: 'Robert Lee',
-    history: ['Chronic Back Pain']
+    history: ['Chronic Back Pain'],
+    mobile: '+91-9876543212'
   }
 };
 
-const doctorsDB = [
-  {
-    id: 'D101',
-    name: 'Dr. Sarah Johnson',
-    specialty: 'Ophthalmology',
-    department: 'Ophthalmology',
-    slots: ['09:00', '10:00', '11:00', '14:00', '15:00']
-  },
-  {
-    id: 'D102',
-    name: 'Dr. Michael Chen',
-    specialty: 'Cardiology',
-    department: 'Cardiology',
-    slots: ['09:30', '10:30', '11:30', '14:30', '15:30']
-  },
-  {
-    id: 'D103',
-    name: 'Dr. Emily Rodriguez',
-    specialty: 'Pulmonology',
-    department: 'Pulmonology',
-    slots: ['09:00', '10:00', '11:00', '14:00', '15:00']
-  },
-  {
-    id: 'D104',
-    name: 'Dr. David Kim',
-    specialty: 'General Medicine',
-    department: 'General Medicine',
-    slots: ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '14:00', '14:30', '15:00', '15:30']
-  },
-  {
-    id: 'D105',
-    name: 'Dr. Lisa Anderson',
-    specialty: 'General Medicine',
-    department: 'General Medicine',
-    slots: ['09:00', '10:00', '11:00', '14:00', '15:00']
-  }
-];
+const appointmentsDB = [];
+const spawnedDoctors = new Map(); // Global cache for spawned doctors: doctorId -> doctor object
+const patientTriageCache = new Map(); // Patient triage consistency cache: patientId:Symptoms -> recommendation & doctors
 
-// SMART TRIAGE RULE ENGINE
-function getSmartRecommendation(history, currentSymptoms) {
-  const symptomsLower = currentSymptoms.toLowerCase();
-  const historyLower = history.map(h => h.toLowerCase());
-
-  // Rule 1: Diabetes + vision symptoms -> Ophthalmology
-  if (historyLower.includes('diabetes') && 
-      (symptomsLower.includes('vision') || symptomsLower.includes('blur') || symptomsLower.includes('spots'))) {
-    return {
-      department: 'Ophthalmology',
-      reason: 'Patient history of Diabetes combined with acute visual deficits requires immediate screening for Diabetic Retinopathy.'
-    };
-  }
-
-  // Rule 2: Hypertension + chest/dizzy/pain -> Cardiology
-  if (historyLower.includes('hypertension') && 
-      (symptomsLower.includes('chest') || symptomsLower.includes('dizzy') || symptomsLower.includes('pain'))) {
-    return {
-      department: 'Cardiology',
-      reason: 'Co-occurring Hypertension and chest discomfort/dizziness presents elevated cardiovascular risk profile requiring specialist assessment.'
-    };
-  }
-
-  // Rule 3: Asthma in history OR respiratory symptoms -> Pulmonology
-  if (historyLower.includes('asthma') || 
-      (symptomsLower.includes('breathe') || symptomsLower.includes('cough') || symptomsLower.includes('wheeze'))) {
-    return {
-      department: 'Pulmonology',
-      reason: 'Respiratory symptoms matching or impacting active airway hypersensitivity history routed to Pulmonology.'
-    };
-  }
-
-  // Default Fallback -> General Medicine
-  return {
-    department: 'General Medicine',
-    reason: 'Standard presentation; routed to General Practice for baseline evaluation.'
+// HELPER TO DYNAMICALLY SPAWN INDIAN DOCTOR PROFILES
+function spawnDynamicDoctors(department, hospitalName, hospitalLocation, hospitalPhone) {
+  const firstNames = ['Rajesh', 'Amit', 'Sanjay', 'Vikram', 'Priya', 'Anjali', 'Sunita', 'Meera', 'Arjun', 'Deepak', 'Vijay', 'Sneha', 'Rohan', 'Neha'];
+  const lastNames = ['Sharma', 'Patel', 'Verma', 'Gupta', 'Iyer', 'Nair', 'Reddy', 'Rao', 'Choudhury', 'Joshi', 'Mehta', 'Sen', 'Das', 'Mishra'];
+  
+  const specialtyMap = {
+    'Cardiology': 'Cardiologist',
+    'Gynecology': 'Gynecologist',
+    'Pulmonology': 'Pulmonologist',
+    'Ophthalmology': 'Ophthalmologist',
+    'General Medicine': 'General Physician'
   };
+  
+  const specialty = specialtyMap[department] || 'General Practitioner';
+  
+  // Spawn 2 to 3 doctors
+  const count = Math.floor(Math.random() * 2) + 2; // 2 or 3
+  const doctors = [];
+  
+  // Standard sequences of open calendar slots
+  const slotSequences = [
+    ['09:00', '11:15', '14:30'],
+    ['10:00', '12:30', '15:15', '16:45'],
+    ['08:30', '11:00', '13:45', '15:30'],
+    ['09:30', '12:00', '14:15', '16:00'],
+    ['11:15', '14:30', '17:00']
+  ];
+  
+  for (let i = 0; i < count; i++) {
+    const fName = firstNames[Math.floor(Math.random() * firstNames.length)];
+    const lName = lastNames[Math.floor(Math.random() * lastNames.length)];
+    const doctorId = `DOC-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    const slots = [...slotSequences[Math.floor(Math.random() * slotSequences.length)]];
+    
+    const doc = {
+      id: doctorId,
+      name: `Dr. ${fName} ${lName}`,
+      specialty: specialty,
+      department: department,
+      slots: slots,
+      hospitalName: hospitalName,
+      hospitalLocation: hospitalLocation,
+      hospitalPhone: hospitalPhone
+    };
+    
+    // Cache the doctor details globally for lookup during booking
+    spawnedDoctors.set(doctorId, doc);
+    doctors.push(doc);
+  }
+  
+  return doctors;
+}
+
+// LIVE LLM STREAMING PIPELINE USING GEMINI
+async function getAIRecommendation(history, currentSymptoms) {
+  // If API key is mock or empty, return simulated Gemini response to prevent complete crash
+  if (apiKey === 'mock-api-key') {
+    console.log('[GEMINI] API Key is missing or default. Returning simulated recommendation.');
+    return simulateTriageResult(currentSymptoms);
+  }
+
+  try {
+    const systemInstruction = `You are a medical triage AI assistant. Analyze patient symptoms and medical history to recommend the appropriate medical department.
+Available departments: Cardiology, Gynecology, Pulmonology, Ophthalmology, General Medicine.
+
+You must output a strict, raw JSON block matching this structure:
+{
+  "department": "Cardiology / Gynecology / Pulmonology / Ophthalmology / General Medicine",
+  "reasoning": "Clinical justification mapping the submitted symptoms.",
+  "recommendedHospital": "Realistic premium hospital name in India.",
+  "hospitalLocation": "Realistic specific metro city branch/address in India.",
+  "hospitalPhone": "Realistic standard Indian hospital contact helpline number (+91 XX XXXX XXXX)"
+}
+
+Do not include any styling, markdown codeblocks (like \`\`\`json), or additional conversational text. Just output the raw JSON object.`;
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      systemInstruction: systemInstruction,
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.2
+      }
+    });
+
+    const prompt = `Patient Medical History: ${history.length > 0 ? history.join(', ') : 'None recorded'}
+Current Symptoms: ${currentSymptoms}
+
+Please analyze the details and provide the recommendation in the specified JSON format.`;
+
+    console.log('\n--- [GEMINI STREAM START] ---');
+    const result = await model.generateContentStream(prompt);
+    
+    let completeResponse = '';
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      completeResponse += chunkText;
+      process.stdout.write(chunkText); // Stream console trace
+    }
+    console.log('\n--- [GEMINI STREAM END] ---\n');
+
+    let cleaned = completeResponse.trim();
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```json\s*/, '').replace(/```$/, '').trim();
+    }
+
+    const parsedResponse = JSON.parse(cleaned);
+
+    // Validate structure
+    if (!parsedResponse.department || !parsedResponse.reasoning || 
+        !parsedResponse.recommendedHospital || !parsedResponse.hospitalLocation || !parsedResponse.hospitalPhone) {
+      throw new Error('Invalid AI response structure');
+    }
+
+    const validDepartments = ['Cardiology', 'Gynecology', 'Pulmonology', 'Ophthalmology', 'General Medicine'];
+    if (!validDepartments.includes(parsedResponse.department)) {
+      parsedResponse.department = 'General Medicine';
+    }
+
+    return parsedResponse;
+  } catch (error) {
+    console.error('Gemini Triage Error:', error.message);
+    // If it's a parsing error or API error, throw it so the client handles it
+    throw error;
+  }
+}
+
+// Fallback simulator for when GEMINI_API_KEY is not configured
+function simulateTriageResult(currentSymptoms) {
+  const symptomsLower = currentSymptoms.toLowerCase();
+  let result = {
+    department: 'General Medicine',
+    reasoning: 'Symptoms evaluated by the baseline triage system. Advised general assessment.',
+    recommendedHospital: 'Max Super Speciality Hospital',
+    hospitalLocation: 'Saket, New Delhi, Delhi 110017',
+    hospitalPhone: '+91 11 2651 5050'
+  };
+
+  if (symptomsLower.includes('heart') || symptomsLower.includes('chest') || symptomsLower.includes('palpitation')) {
+    result = {
+      department: 'Cardiology',
+      reasoning: 'Cardiovascular symptoms detected. Recommended immediately to cardiology specialists.',
+      recommendedHospital: 'Fortis Escorts Heart Institute',
+      hospitalLocation: 'Okhla Road, New Delhi, Delhi 110025',
+      hospitalPhone: '+91 11 4713 5000'
+    };
+  } else if (symptomsLower.includes('pregnan') || symptomsLower.includes('period') || symptomsLower.includes('gynecol')) {
+    result = {
+      department: 'Gynecology',
+      reasoning: 'Gynecological or maternity symptoms identified.',
+      recommendedHospital: 'Apollo Cradle & Children’s Hospital',
+      hospitalLocation: 'Koramangala, Bengaluru, Karnataka 560034',
+      hospitalPhone: '+91 80 4424 4424'
+    };
+  } else if (symptomsLower.includes('breath') || symptomsLower.includes('cough') || symptomsLower.includes('asthma') || symptomsLower.includes('lung')) {
+    result = {
+      department: 'Pulmonology',
+      reasoning: 'Respiratory distress or pulmonary symptoms detected.',
+      recommendedHospital: 'Medanta - The Medicity',
+      hospitalLocation: 'Sector 38, Gurugram, Haryana 122001',
+      hospitalPhone: '+91 12 4414 1414'
+    };
+  } else if (symptomsLower.includes('eye') || symptomsLower.includes('vision') || symptomsLower.includes('blind') || symptomsLower.includes('blur')) {
+    result = {
+      department: 'Ophthalmology',
+      reasoning: 'Ocular discomfort or vision-related symptoms detected.',
+      recommendedHospital: 'Dr. Shroff\'s Charity Eye Hospital',
+      hospitalLocation: 'Daryaganj, New Delhi, Delhi 110002',
+      hospitalPhone: '+91 11 4352 4444'
+    };
+  }
+
+  return result;
 }
 
 // API ENDPOINTS
 
-// POST /api/triage - Evaluate patient and recommend department
-app.post('/api/triage', (req, res) => {
+// POST /api/triage - Get triage recommendation & dynamically spawn doctors
+app.post('/api/triage', async (req, res) => {
   const { patientId, currentSymptoms } = req.body;
 
   if (!patientId || !currentSymptoms) {
     return res.status(400).json({ error: 'Patient ID and symptoms are required' });
   }
 
-  // Fetch or register patient
-  let patient = patientsDB[patientId];
-  if (!patient) {
-    // Dynamically register new patient
-    patient = {
-      id: patientId,
-      name: `Patient ${patientId}`,
-      history: []
-    };
-    patientsDB[patientId] = patient;
-  }
+  try {
+    // Fetch or register patient
+    let patient = patientsDB[patientId];
+    if (!patient) {
+      patient = {
+        id: patientId,
+        name: `Patient ${patientId}`,
+        history: [],
+        mobile: '+91-XXXXXXXXXX'
+      };
+      patientsDB[patientId] = patient;
+    }
 
-  // Get recommendation from triage engine
-  const recommendation = getSmartRecommendation(patient.history, currentSymptoms);
+    // Cache lookup key to preserve doctor lists on slot refresh
+    const cacheKey = `${patientId}:${currentSymptoms.trim()}`;
+    let recommendation;
+    let doctors;
 
-  // Find available doctors in the recommended department
-  const availableDoctors = doctorsDB
-    .filter(doc => doc.department === recommendation.department && doc.slots.length > 0)
-    .map(doc => ({
-      id: doc.id,
-      name: doc.name,
-      specialty: doc.specialty,
-      department: doc.department,
-      slots: [...doc.slots]
-    }));
+    if (patientTriageCache.has(cacheKey)) {
+      const cached = patientTriageCache.get(cacheKey);
+      recommendation = cached.recommendation;
+      // Get the current live doctor states (preserving slots remaining)
+      doctors = cached.doctors.map(doc => spawnedDoctors.get(doc.id)).filter(Boolean);
+    } else {
+      recommendation = await getAIRecommendation(patient.history, currentSymptoms);
+      doctors = spawnDynamicDoctors(
+        recommendation.department,
+        recommendation.recommendedHospital,
+        recommendation.hospitalLocation,
+        recommendation.hospitalPhone
+      );
+      patientTriageCache.set(cacheKey, { recommendation, doctors });
+    }
 
-  // If no specialist slots available, fallback to General Medicine
-  if (availableDoctors.length === 0 && recommendation.department !== 'General Medicine') {
-    const generalDoctors = doctorsDB
-      .filter(doc => doc.department === 'General Medicine' && doc.slots.length > 0)
-      .map(doc => ({
-        id: doc.id,
-        name: doc.name,
-        specialty: doc.specialty,
-        department: doc.department,
-        slots: [...doc.slots]
-      }));
-
-    return res.json({
+    res.json({
       patient,
-      recommendation: {
-        ...recommendation,
-        department: 'General Medicine',
-        reason: `${recommendation.reason} No specialist slots available; routed to General Medicine.`
-      },
-      doctors: generalDoctors
+      triageResult: {
+        department: recommendation.department,
+        reasoning: recommendation.reasoning,
+        recommendedHospital: recommendation.recommendedHospital,
+        hospitalLocation: recommendation.hospitalLocation,
+        hospitalPhone: recommendation.hospitalPhone,
+        doctors: doctors
+      }
     });
+  } catch (error) {
+    console.error('Triage Processing Error:', error);
+    res.status(500).json({ error: 'Failed to process triage request: ' + error.message });
   }
-
-  res.json({
-    patient,
-    recommendation,
-    doctors: availableDoctors
-  });
 });
 
-// POST /api/appointments - Book an appointment
+// POST /api/appointments - Book appointment & trigger confirmation
 app.post('/api/appointments', (req, res) => {
-  const { patientId, doctorId, slot } = req.body;
+  const { patientId, patientPhone, doctorId, slot, hospitalName } = req.body;
 
+  if (!patientPhone || patientPhone.trim() === '') {
+    return res.status(400).json({ error: 'Patient Mobile Number (patientPhone) is mandatory for booking confirmation.' });
+  }
   if (!patientId || !doctorId || !slot) {
-    return res.status(400).json({ error: 'Patient ID, doctor ID, and slot are required' });
+    return res.status(400).json({ error: 'Patient ID, Doctor ID, and appointment slot are required.' });
   }
 
-  // Find the doctor
-  const doctorIndex = doctorsDB.findIndex(doc => doc.id === doctorId);
-  if (doctorIndex === -1) {
-    return res.status(404).json({ error: 'Doctor not found' });
+  // Look up the dynamically spawned doctor
+  const doctor = spawnedDoctors.get(doctorId);
+  if (!doctor) {
+    return res.status(404).json({ error: 'Doctor not found or session has expired.' });
   }
 
-  const doctor = doctorsDB[doctorIndex];
-
-  // Check if slot is available
+  // Verify and book slot
   const slotIndex = doctor.slots.indexOf(slot);
   if (slotIndex === -1) {
-    return res.status(400).json({ error: 'Slot not available' });
+    return res.status(400).json({ error: 'Selected time slot is no longer available.' });
   }
 
-  // Atomically remove the slot
+  // Atomically remove slot
   doctor.slots.splice(slotIndex, 1);
+
+  const doctorName = doctor.name;
+  const hospitalLocation = doctor.hospitalLocation;
+  const hospitalPhone = doctor.hospitalPhone;
+
+  // Strict console validation trace simulation for SMS gateway
+  console.log(`[SMS GATEWAY] Sending confirmation text to ${patientPhone}: Hi ${patientId}, your appointment with ${doctorName} at ${hospitalName} (${hospitalLocation}) for slot ${slot} is confirmed! Helpdesk: ${hospitalPhone}.`);
+
+  const appointment = {
+    id: `APT${Date.now()}`,
+    patientId,
+    patientPhone,
+    doctorId,
+    doctorName,
+    doctorSpecialty: doctor.specialty,
+    department: doctor.department,
+    hospitalName,
+    hospitalLocation,
+    hospitalPhone,
+    slot,
+    bookingDate: new Date().toISOString(),
+    confirmationTrace: `[SMS GATEWAY] Sent confirmation to ${patientPhone}`
+  };
+
+  appointmentsDB.push(appointment);
 
   res.json({
     success: true,
-    message: `Appointment booked successfully for ${patientsDB[patientId]?.name || patientId} with ${doctor.name} at ${slot}`
+    message: `Appointment booked successfully with ${doctorName} at ${slot}`,
+    appointment
+  });
+});
+
+// GET /api/appointments - View appointments
+app.get('/api/appointments', (req, res) => {
+  res.json({
+    total: appointmentsDB.length,
+    appointments: appointmentsDB
   });
 });
 
@@ -207,4 +352,5 @@ app.get('/api/health', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Medical Triage Server running on port ${PORT}`);
+  console.log(`Gemini API Client: ${apiKey !== 'mock-api-key' ? 'Enabled (Gemini)' : 'Mock Mode (Simulated)'}`);
 });
