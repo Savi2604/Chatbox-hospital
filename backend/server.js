@@ -7,7 +7,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Initialize OpenAI client
-const apiKey = process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.startsWith('sk-proj-6fV8ty')
+const apiKey = process.env.OPENAI_API_KEY && 
+               process.env.OPENAI_API_KEY !== 'your-openai-api-key-here' && 
+               process.env.OPENAI_API_KEY.trim() !== ''
   ? process.env.OPENAI_API_KEY
   : 'mock-api-key';
 
