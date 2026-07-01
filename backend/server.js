@@ -168,7 +168,8 @@ Please analyze the details and provide the recommendation in the specified JSON 
     return parsedResponse;
   } catch (error) {
     console.error('OpenAI Triage Error:', error.message);
-    throw error;
+    console.log('Falling back to simulated triage result due to API/quota error.');
+    return simulateTriageResult(currentSymptoms);
   }
 }
 
