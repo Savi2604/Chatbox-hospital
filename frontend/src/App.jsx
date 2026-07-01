@@ -76,8 +76,11 @@ function App() {
           patientId,
           patientPhone: patientPhone.trim(),
           doctorId: selectedSlot.doctorId,
+          doctorName: selectedSlot.doctorName,
           slot: selectedSlot.slot,
-          hospitalName: selectedSlot.hospitalName
+          hospitalName: selectedSlot.hospitalName,
+          hospitalLocation: selectedSlot.hospitalLocation,
+          hospitalPhone: selectedSlot.hospitalPhone
         }),
       });
 
@@ -281,7 +284,9 @@ function App() {
                                 doctorName: doctor.name,
                                 specialty: doctor.specialty,
                                 slot: slot,
-                                hospitalName: triageResult.recommendedHospital
+                                hospitalName: triageResult.recommendedHospital,
+                                hospitalLocation: triageResult.hospitalLocation,
+                                hospitalPhone: triageResult.hospitalPhone
                               });
                             }}
                             className="slot-button"

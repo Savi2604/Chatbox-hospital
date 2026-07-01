@@ -7,8 +7,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Initialize OpenAI client
-const apiKey = process.env.OPENAI_API_KEY && 
-               process.env.OPENAI_API_KEY !== 'your-openai-api-key-here' && 
+const apiKey = process.env.OPENAI_API_KEY &&
+               process.env.OPENAI_API_KEY !== 'your-openai-api-key-here' &&
                process.env.OPENAI_API_KEY.trim() !== ''
   ? process.env.OPENAI_API_KEY
   : 'mock-api-key';
@@ -22,50 +22,30 @@ app.use(express.json());
 
 // DATA MODELS & IN-MEMORY DATASTORES
 const patientsDB = {
-  'P101': {
-    id: 'P101',
-    name: 'John Doe',
-    history: ['Diabetes', 'Hypertension'],
-    mobile: '+91-9876543210'
-  },
-  'P102': {
-    id: 'P102',
-    name: 'Jane Smith',
-    history: ['Asthma', 'Allergies'],
-    mobile: '+91-9876543211'
-  },
-  'P103': {
-    id: 'P103',
-    name: 'Robert Lee',
-    history: ['Chronic Back Pain'],
-    mobile: '+91-9876543212'
-  }
+  'P101': { id: 'P101', name: 'John Doe',    history: ['Diabetes', 'Hypertension'], mobile: '+91-9876543210' },
+  'P102': { id: 'P102', name: 'Jane Smith',  history: ['Asthma', 'Allergies'],      mobile: '+91-9876543211' },
+  'P103': { id: 'P103', name: 'Robert Lee',  history: ['Chronic Back Pain'],        mobile: '+91-9876543212' }
 };
 
 const appointmentsDB = [];
-const spawnedDoctors = new Map(); // Global cache for spawned doctors: doctorId -> doctor object
-const patientTriageCache = new Map(); // Patient triage consistency cache: patientId:Symptoms -> recommendation & doctors
 
 // HELPER TO DYNAMICALLY SPAWN INDIAN DOCTOR PROFILES
 function spawnDynamicDoctors(department, hospitalName, hospitalLocation, hospitalPhone) {
-  const firstNames = ['Rajesh', 'Amit', 'Sanjay', 'Vikram', 'Priya', 'Anjali', 'Sunita', 'Meera', 'Arjun', 'Deepak', 'Vijay', 'Sneha', 'Rohan', 'Neha'];
-  const lastNames = ['Sharma', 'Patel', 'Verma', 'Gupta', 'Iyer', 'Nair', 'Reddy', 'Rao', 'Choudhury', 'Joshi', 'Mehta', 'Sen', 'Das', 'Mishra'];
-  
+  const firstNames  = ['Rajesh','Amit','Sanjay','Vikram','Priya','Anjali','Sunita','Meera','Arjun','Deepak','Vijay','Sneha','Rohan','Neha','Kavitha','Suresh'];
+  const lastNames   = ['Sharma','Patel','Verma','Gupta','Iyer','Nair','Reddy','Rao','Choudhury','Joshi','Mehta','Sen','Das','Mishra','Kumar','Singh'];
+
   const specialtyMap = {
-    'Cardiology': 'Cardiologist',
-    'Gynecology': 'Gynecologist',
-    'Pulmonology': 'Pulmonologist',
-    'Ophthalmology': 'Ophthalmologist',
+    'Cardiology':       'Cardiologist',
+    'Gynecology':       'Gynecologist',
+    'Pulmonology':      'Pulmonologist',
+    'Ophthalmology':    'Ophthalmologist',
     'General Medicine': 'General Physician'
   };
-  
+
   const specialty = specialtyMap[department] || 'General Practitioner';
-  
-  // Spawn 2 to 3 doctors
-  const count = Math.floor(Math.random() * 2) + 2; // 2 or 3
+  const count = Math.floor(Math.random() * 2) + 2; // 2 or 3 doctors
   const doctors = [];
-  
-  // Standard sequences of open calendar slots
+
   const slotSequences = [
     ['09:00', '11:15', '14:30'],
     ['10:00', '12:30', '15:15', '16:45'],
@@ -73,37 +53,105 @@ function spawnDynamicDoctors(department, hospitalName, hospitalLocation, hospita
     ['09:30', '12:00', '14:15', '16:00'],
     ['11:15', '14:30', '17:00']
   ];
-  
+
   for (let i = 0; i < count; i++) {
-    const fName = firstNames[Math.floor(Math.random() * firstNames.length)];
-    const lName = lastNames[Math.floor(Math.random() * lastNames.length)];
-    const doctorId = `DOC-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    const slots = [...slotSequences[Math.floor(Math.random() * slotSequences.length)]];
-    
-    const doc = {
+    const fName    = firstNames[Math.floor(Math.random() * firstNames.length)];
+    const lName    = lastNames [Math.floor(Math.random() * lastNames.length)];
+    const doctorId = `DOC-${Date.now()}-${Math.random().toString(36).substr(2,6).toUpperCase()}`;
+    const slots    = [...slotSequences[Math.floor(Math.random() * slotSequences.length)]];
+
+    doctors.push({
       id: doctorId,
       name: `Dr. ${fName} ${lName}`,
-      specialty: specialty,
-      department: department,
-      slots: slots,
-      hospitalName: hospitalName,
-      hospitalLocation: hospitalLocation,
-      hospitalPhone: hospitalPhone
-    };
-    
-    // Cache the doctor details globally for lookup during booking
-    spawnedDoctors.set(doctorId, doc);
-    doctors.push(doc);
+      specialty,
+      department,
+      slots,
+      hospitalName,
+      hospitalLocation,
+      hospitalPhone
+    });
   }
-  
+
   return doctors;
 }
 
-// LIVE LLM STREAMING PIPELINE USING OPENAI
+// COMPREHENSIVE SYMPTOM -> DEPARTMENT/HOSPITAL MAPPING
+function simulateTriageResult(currentSymptoms) {
+  const s = currentSymptoms.toLowerCase();
+
+  // Cardiology
+  if (s.includes('chest') || s.includes('heart') || s.includes('palpitation') ||
+      s.includes('cardiac') || s.includes('angina') || s.includes('blood pressure') ||
+      s.includes('hypertension') || s.includes('breathless') || s.includes('pressure in chest') ||
+      s.includes('arm pain') || s.includes('jaw pain') || s.includes('dizzy') ||
+      s.includes('fainting') || s.includes('arrhythmia') || s.includes('tachycardia')) {
+    return {
+      department: 'Cardiology',
+      reasoning: 'Cardiovascular symptoms detected. Patient requires immediate cardiac evaluation and specialist assessment.',
+      recommendedHospital: 'Fortis Escorts Heart Institute',
+      hospitalLocation: 'Okhla Road, New Delhi, Delhi – 110025',
+      hospitalPhone: '+91 11 4713 5000'
+    };
+  }
+
+  // Gynecology
+  if (s.includes('pregnan') || s.includes('period') || s.includes('menstrual') ||
+      s.includes('gynecol') || s.includes('obstetric') || s.includes('uterus') ||
+      s.includes('ovarian') || s.includes('vaginal') || s.includes('pcos') ||
+      s.includes('fertility') || s.includes('discharge') || s.includes('breast pain') ||
+      s.includes('missed period') || s.includes('cramps')) {
+    return {
+      department: 'Gynecology',
+      reasoning: 'Gynecological or maternity-related symptoms identified. Referred to specialist care.',
+      recommendedHospital: 'Apollo Cradle & Childrens Hospital',
+      hospitalLocation: 'Koramangala, Bengaluru, Karnataka – 560034',
+      hospitalPhone: '+91 80 4424 4424'
+    };
+  }
+
+  // Pulmonology
+  if (s.includes('cough') || s.includes('breath') || s.includes('asthma') ||
+      s.includes('lung') || s.includes('wheez') || s.includes('pneumonia') ||
+      s.includes('tuberculosis') || s.includes('tb') || s.includes('sputum') ||
+      s.includes('bronchitis') || s.includes('inhaler') || s.includes('oxygen') ||
+      s.includes('shortness of breath') || s.includes('chest tightness')) {
+    return {
+      department: 'Pulmonology',
+      reasoning: 'Respiratory distress or chronic pulmonary symptoms detected. Referred to Pulmonology.',
+      recommendedHospital: 'Medanta - The Medicity',
+      hospitalLocation: 'Sector 38, Gurugram, Haryana – 122001',
+      hospitalPhone: '+91 124 414 1414'
+    };
+  }
+
+  // Ophthalmology
+  if (s.includes('eye') || s.includes('vision') || s.includes('blur') ||
+      s.includes('blind') || s.includes('cataract') || s.includes('glaucoma') ||
+      s.includes('retina') || s.includes('itchy eye') || s.includes('red eye') ||
+      s.includes('watering eye') || s.includes('sight') || s.includes('double vision')) {
+    return {
+      department: 'Ophthalmology',
+      reasoning: 'Ocular discomfort or vision-related symptoms detected. Referred to Ophthalmology.',
+      recommendedHospital: 'Sankara Nethralaya Eye Hospital',
+      hospitalLocation: 'Nungambakkam, Chennai, Tamil Nadu – 600006',
+      hospitalPhone: '+91 44 2827 1616'
+    };
+  }
+
+  // General Medicine (default)
+  return {
+    department: 'General Medicine',
+    reasoning: 'General symptoms detected. Routed to General Medicine for baseline evaluation and treatment.',
+    recommendedHospital: 'Max Super Speciality Hospital',
+    hospitalLocation: 'Saket, New Delhi, Delhi – 110017',
+    hospitalPhone: '+91 11 2651 5050'
+  };
+}
+
+// LIVE LLM PIPELINE USING OPENAI (with graceful fallback)
 async function getAIRecommendation(history, currentSymptoms) {
-  // If API key is mock or empty, return simulated OpenAI response to prevent complete crash
   if (apiKey === 'mock-api-key') {
-    console.log('[OPENAI] API Key is missing or default. Returning simulated recommendation.');
+    console.log('[OPENAI] No API key configured — using simulated triage.');
     return simulateTriageResult(currentSymptoms);
   }
 
@@ -111,249 +159,153 @@ async function getAIRecommendation(history, currentSymptoms) {
     const systemInstruction = `You are a medical triage AI assistant. Analyze patient symptoms and medical history to recommend the appropriate medical department.
 Available departments: Cardiology, Gynecology, Pulmonology, Ophthalmology, General Medicine.
 
-You must output a strict, raw JSON block matching this structure:
+Output ONLY a raw JSON object — no markdown, no extra text — matching this structure exactly:
 {
-  "department": "Cardiology / Gynecology / Pulmonology / Ophthalmology / General Medicine",
+  "department": "one of the five departments above",
   "reasoning": "Clinical justification mapping the submitted symptoms.",
   "recommendedHospital": "Realistic premium hospital name in India.",
   "hospitalLocation": "Realistic specific metro city branch/address in India.",
-  "hospitalPhone": "Realistic standard Indian hospital contact helpline number (+91 XX XXXX XXXX)"
-}
-
-Do not include any styling, markdown codeblocks (like \`\`\`json), or additional conversational text. Just output the raw JSON object.`;
+  "hospitalPhone": "Realistic Indian hospital helpline number in format +91 XX XXXX XXXX"
+}`;
 
     const prompt = `Patient Medical History: ${history.length > 0 ? history.join(', ') : 'None recorded'}
 Current Symptoms: ${currentSymptoms}
 
-Please analyze the details and provide the recommendation in the specified JSON format.`;
+Provide the triage recommendation as a raw JSON object.`;
 
     console.log('\n--- [OPENAI STREAM START] ---');
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: 'gpt-4o-mini',
       messages: [
-        { role: "system", content: systemInstruction },
-        { role: "user", content: prompt }
+        { role: 'system', content: systemInstruction },
+        { role: 'user',   content: prompt }
       ],
       temperature: 0.2,
-      response_format: { type: "json_object" },
+      response_format: { type: 'json_object' },
       stream: true
     });
-    
+
     let completeResponse = '';
     for await (const chunk of completion) {
-      const chunkText = chunk.choices[0]?.delta?.content || '';
-      completeResponse += chunkText;
-      process.stdout.write(chunkText); // Stream console trace
+      const text = chunk.choices[0]?.delta?.content || '';
+      completeResponse += text;
+      process.stdout.write(text);
     }
     console.log('\n--- [OPENAI STREAM END] ---\n');
 
-    let cleaned = completeResponse.trim();
-    if (cleaned.startsWith('```')) {
-      cleaned = cleaned.replace(/^```json\s*/, '').replace(/```$/, '').trim();
-    }
+    let cleaned = completeResponse.trim().replace(/^```json\s*/, '').replace(/```$/, '').trim();
+    const parsed = JSON.parse(cleaned);
 
-    const parsedResponse = JSON.parse(cleaned);
+    const validDepts = ['Cardiology', 'Gynecology', 'Pulmonology', 'Ophthalmology', 'General Medicine'];
+    if (!parsed.department || !validDepts.includes(parsed.department)) parsed.department = 'General Medicine';
+    if (!parsed.reasoning)           throw new Error('Missing reasoning field');
+    if (!parsed.recommendedHospital) throw new Error('Missing recommendedHospital field');
+    if (!parsed.hospitalLocation)    throw new Error('Missing hospitalLocation field');
+    if (!parsed.hospitalPhone)       throw new Error('Missing hospitalPhone field');
 
-    // Validate structure
-    if (!parsedResponse.department || !parsedResponse.reasoning || 
-        !parsedResponse.recommendedHospital || !parsedResponse.hospitalLocation || !parsedResponse.hospitalPhone) {
-      throw new Error('Invalid AI response structure');
-    }
-
-    const validDepartments = ['Cardiology', 'Gynecology', 'Pulmonology', 'Ophthalmology', 'General Medicine'];
-    if (!validDepartments.includes(parsedResponse.department)) {
-      parsedResponse.department = 'General Medicine';
-    }
-
-    return parsedResponse;
-  } catch (error) {
-    console.error('OpenAI Triage Error:', error.message);
-    console.log('Falling back to simulated triage result due to API/quota error.');
+    return parsed;
+  } catch (err) {
+    console.error('[OPENAI] Error:', err.message, '— falling back to simulated triage.');
     return simulateTriageResult(currentSymptoms);
   }
 }
 
-// Fallback simulator for when OPENAI_API_KEY is not configured
-function simulateTriageResult(currentSymptoms) {
-  const symptomsLower = currentSymptoms.toLowerCase();
-  let result = {
-    department: 'General Medicine',
-    reasoning: 'Symptoms evaluated by the baseline triage system. Advised general assessment.',
-    recommendedHospital: 'Max Super Speciality Hospital',
-    hospitalLocation: 'Saket, New Delhi, Delhi 110017',
-    hospitalPhone: '+91 11 2651 5050'
-  };
+// ─── API ENDPOINTS ────────────────────────────────────────────────────────────
 
-  if (symptomsLower.includes('heart') || symptomsLower.includes('chest') || symptomsLower.includes('palpitation')) {
-    result = {
-      department: 'Cardiology',
-      reasoning: 'Cardiovascular symptoms detected. Recommended immediately to cardiology specialists.',
-      recommendedHospital: 'Fortis Escorts Heart Institute',
-      hospitalLocation: 'Okhla Road, New Delhi, Delhi 110025',
-      hospitalPhone: '+91 11 4713 5000'
-    };
-  } else if (symptomsLower.includes('pregnan') || symptomsLower.includes('period') || symptomsLower.includes('gynecol')) {
-    result = {
-      department: 'Gynecology',
-      reasoning: 'Gynecological or maternity symptoms identified.',
-      recommendedHospital: 'Apollo Cradle & Children’s Hospital',
-      hospitalLocation: 'Koramangala, Bengaluru, Karnataka 560034',
-      hospitalPhone: '+91 80 4424 4424'
-    };
-  } else if (symptomsLower.includes('breath') || symptomsLower.includes('cough') || symptomsLower.includes('asthma') || symptomsLower.includes('lung')) {
-    result = {
-      department: 'Pulmonology',
-      reasoning: 'Respiratory distress or pulmonary symptoms detected.',
-      recommendedHospital: 'Medanta - The Medicity',
-      hospitalLocation: 'Sector 38, Gurugram, Haryana 122001',
-      hospitalPhone: '+91 12 4414 1414'
-    };
-  } else if (symptomsLower.includes('eye') || symptomsLower.includes('vision') || symptomsLower.includes('blind') || symptomsLower.includes('blur')) {
-    result = {
-      department: 'Ophthalmology',
-      reasoning: 'Ocular discomfort or vision-related symptoms detected.',
-      recommendedHospital: 'Dr. Shroff\'s Charity Eye Hospital',
-      hospitalLocation: 'Daryaganj, New Delhi, Delhi 110002',
-      hospitalPhone: '+91 11 4352 4444'
-    };
-  }
-
-  return result;
-}
-
-// API ENDPOINTS
-
-// POST /api/triage - Get triage recommendation & dynamically spawn doctors
+// POST /api/triage
 app.post('/api/triage', async (req, res) => {
   const { patientId, currentSymptoms } = req.body;
-
   if (!patientId || !currentSymptoms) {
-    return res.status(400).json({ error: 'Patient ID and symptoms are required' });
+    return res.status(400).json({ error: 'Patient ID and symptoms are required.' });
   }
 
   try {
-    // Fetch or register patient
     let patient = patientsDB[patientId];
     if (!patient) {
-      patient = {
-        id: patientId,
-        name: `Patient ${patientId}`,
-        history: [],
-        mobile: '+91-XXXXXXXXXX'
-      };
+      patient = { id: patientId, name: `Patient ${patientId}`, history: [], mobile: '+91-XXXXXXXXXX' };
       patientsDB[patientId] = patient;
     }
 
-    // Cache lookup key to preserve doctor lists on slot refresh
-    const cacheKey = `${patientId}:${currentSymptoms.trim()}`;
-    let recommendation;
-    let doctors;
-
-    if (patientTriageCache.has(cacheKey)) {
-      const cached = patientTriageCache.get(cacheKey);
-      recommendation = cached.recommendation;
-      // Get the current live doctor states (preserving slots remaining)
-      doctors = cached.doctors.map(doc => spawnedDoctors.get(doc.id)).filter(Boolean);
-    } else {
-      recommendation = await getAIRecommendation(patient.history, currentSymptoms);
-      doctors = spawnDynamicDoctors(
-        recommendation.department,
-        recommendation.recommendedHospital,
-        recommendation.hospitalLocation,
-        recommendation.hospitalPhone
-      );
-      patientTriageCache.set(cacheKey, { recommendation, doctors });
-    }
+    const recommendation = await getAIRecommendation(patient.history, currentSymptoms);
+    const doctors = spawnDynamicDoctors(
+      recommendation.department,
+      recommendation.recommendedHospital,
+      recommendation.hospitalLocation,
+      recommendation.hospitalPhone
+    );
 
     res.json({
       patient,
       triageResult: {
-        department: recommendation.department,
-        reasoning: recommendation.reasoning,
+        department:          recommendation.department,
+        reasoning:           recommendation.reasoning,
         recommendedHospital: recommendation.recommendedHospital,
-        hospitalLocation: recommendation.hospitalLocation,
-        hospitalPhone: recommendation.hospitalPhone,
-        doctors: doctors
+        hospitalLocation:    recommendation.hospitalLocation,
+        hospitalPhone:       recommendation.hospitalPhone,
+        doctors
       }
     });
-  } catch (error) {
-    console.error('Triage Processing Error:', error);
-    res.status(500).json({ error: 'Failed to process triage request: ' + error.message });
+  } catch (err) {
+    console.error('Triage Error:', err);
+    res.status(500).json({ error: 'Failed to process triage request: ' + err.message });
   }
 });
 
-// POST /api/appointments - Book appointment & trigger confirmation
+// POST /api/appointments  ← STATELESS: all details come from the request body
 app.post('/api/appointments', (req, res) => {
-  const { patientId, patientPhone, doctorId, slot, hospitalName } = req.body;
+  const { patientId, patientPhone, doctorId, doctorName, slot,
+          hospitalName, hospitalLocation, hospitalPhone } = req.body;
 
   if (!patientPhone || patientPhone.trim() === '') {
-    return res.status(400).json({ error: 'Patient Mobile Number (patientPhone) is mandatory for booking confirmation.' });
+    return res.status(400).json({ error: 'Patient Mobile Number is mandatory for booking confirmation.' });
   }
   if (!patientId || !doctorId || !slot) {
-    return res.status(400).json({ error: 'Patient ID, Doctor ID, and appointment slot are required.' });
+    return res.status(400).json({ error: 'Patient ID, Doctor ID, and slot are required.' });
   }
 
-  // Look up the dynamically spawned doctor
-  const doctor = spawnedDoctors.get(doctorId);
-  if (!doctor) {
-    return res.status(404).json({ error: 'Doctor not found or session has expired.' });
-  }
+  const resolvedDoctorName    = doctorName    || 'the selected doctor';
+  const resolvedHospitalName  = hospitalName  || 'the recommended hospital';
+  const resolvedHospitalLoc   = hospitalLocation || 'the hospital';
+  const resolvedHospitalPhone = hospitalPhone || 'N/A';
 
-  // Verify and book slot
-  const slotIndex = doctor.slots.indexOf(slot);
-  if (slotIndex === -1) {
-    return res.status(400).json({ error: 'Selected time slot is no longer available.' });
-  }
-
-  // Atomically remove slot
-  doctor.slots.splice(slotIndex, 1);
-
-  const doctorName = doctor.name;
-  const hospitalLocation = doctor.hospitalLocation;
-  const hospitalPhone = doctor.hospitalPhone;
-
-  // Strict console validation trace simulation for SMS gateway
-  console.log(`[SMS GATEWAY] Sending confirmation text to ${patientPhone}: Hi ${patientId}, your appointment with ${doctorName} at ${hospitalName} (${hospitalLocation}) for slot ${slot} is confirmed! Helpdesk: ${hospitalPhone}.`);
+  // ── SMS Gateway confirmation trace ──────────────────────────────────────────
+  const smsMessage = `Hi ${patientId}, your appointment with ${resolvedDoctorName} at ${resolvedHospitalName} (${resolvedHospitalLoc}) for slot ${slot} is confirmed! Helpdesk: ${resolvedHospitalPhone}.`;
+  console.log(`[SMS GATEWAY] Sending confirmation text to ${patientPhone}: ${smsMessage}`);
 
   const appointment = {
-    id: `APT${Date.now()}`,
+    id:             `APT${Date.now()}`,
     patientId,
     patientPhone,
     doctorId,
-    doctorName,
-    doctorSpecialty: doctor.specialty,
-    department: doctor.department,
-    hospitalName,
-    hospitalLocation,
-    hospitalPhone,
+    doctorName:     resolvedDoctorName,
+    hospitalName:   resolvedHospitalName,
+    hospitalLocation: resolvedHospitalLoc,
+    hospitalPhone:  resolvedHospitalPhone,
     slot,
-    bookingDate: new Date().toISOString(),
-    confirmationTrace: `[SMS GATEWAY] Sent confirmation to ${patientPhone}`
+    bookingDate:    new Date().toISOString(),
+    smsConfirmation: smsMessage
   };
 
   appointmentsDB.push(appointment);
 
   res.json({
     success: true,
-    message: `Appointment booked successfully with ${doctorName} at ${slot}`,
+    message: `Appointment confirmed with ${resolvedDoctorName} at ${slot}. A confirmation SMS has been sent to ${patientPhone}.`,
     appointment
   });
 });
 
-// GET /api/appointments - View appointments
+// GET /api/appointments
 app.get('/api/appointments', (req, res) => {
-  res.json({
-    total: appointmentsDB.length,
-    appointments: appointmentsDB
-  });
+  res.json({ total: appointmentsDB.length, appointments: appointmentsDB });
 });
 
-// Health check endpoint
+// GET /api/health
 app.get('/api/health', (req, res) => {
   res.json({ status: 'Server is running', timestamp: new Date().toISOString() });
 });
 
 app.listen(PORT, () => {
   console.log(`Medical Triage Server running on port ${PORT}`);
-  console.log(`OpenAI API Client: ${apiKey !== 'mock-api-key' ? 'Enabled (OpenAI)' : 'Mock Mode (Simulated)'}`);
+  console.log(`OpenAI: ${apiKey !== 'mock-api-key' ? 'Enabled' : 'Mock Mode'}`);
 });
