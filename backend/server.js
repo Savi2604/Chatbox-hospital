@@ -1,18 +1,19 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const OpenAI = require('openai');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Initialize Gemini API client
-// Fallback to OpenAI key if user put their Gemini key in the OpenAI slot, or use default placeholder
-const apiKey = process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'your-gemini-api-key-here'
-  ? process.env.GEMINI_API_KEY
-  : (process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.startsWith('sk-proj-6fV8ty') ? process.env.OPENAI_API_KEY : 'mock-api-key');
+// Initialize OpenAI client
+const apiKey = process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.startsWith('sk-proj-6fV8ty')
+  ? process.env.OPENAI_API_KEY
+  : 'mock-api-key';
 
-const genAI = new GoogleGenerativeAI(apiKey);
+const openai = new OpenAI({
+  apiKey: apiKey === 'mock-api-key' ? 'dummy' : apiKey
+});
 
 app.use(cors());
 app.use(express.json());
@@ -96,11 +97,11 @@ function spawnDynamicDoctors(department, hospitalName, hospitalLocation, hospita
   return doctors;
 }
 
-// LIVE LLM STREAMING PIPELINE USING GEMINI
+// LIVE LLM STREAMING PIPELINE USING OPENAI
 async function getAIRecommendation(history, currentSymptoms) {
-  // If API key is mock or empty, return simulated Gemini response to prevent complete crash
+  // If API key is mock or empty, return simulated OpenAI response to prevent complete crash
   if (apiKey === 'mock-api-key') {
-    console.log('[GEMINI] API Key is missing or default. Returning simulated recommendation.');
+    console.log('[OPENAI] API Key is missing or default. Returning simulated recommendation.');
     return simulateTriageResult(currentSymptoms);
   }
 
@@ -119,30 +120,30 @@ You must output a strict, raw JSON block matching this structure:
 
 Do not include any styling, markdown codeblocks (like \`\`\`json), or additional conversational text. Just output the raw JSON object.`;
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      systemInstruction: systemInstruction,
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.2
-      }
-    });
-
     const prompt = `Patient Medical History: ${history.length > 0 ? history.join(', ') : 'None recorded'}
 Current Symptoms: ${currentSymptoms}
 
 Please analyze the details and provide the recommendation in the specified JSON format.`;
 
-    console.log('\n--- [GEMINI STREAM START] ---');
-    const result = await model.generateContentStream(prompt);
+    console.log('\n--- [OPENAI STREAM START] ---');
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemInstruction },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      stream: true
+    });
     
     let completeResponse = '';
-    for await (const chunk of result.stream) {
-      const chunkText = chunk.text();
+    for await (const chunk of completion) {
+      const chunkText = chunk.choices[0]?.delta?.content || '';
       completeResponse += chunkText;
       process.stdout.write(chunkText); // Stream console trace
     }
-    console.log('\n--- [GEMINI STREAM END] ---\n');
+    console.log('\n--- [OPENAI STREAM END] ---\n');
 
     let cleaned = completeResponse.trim();
     if (cleaned.startsWith('```')) {
@@ -164,13 +165,12 @@ Please analyze the details and provide the recommendation in the specified JSON 
 
     return parsedResponse;
   } catch (error) {
-    console.error('Gemini Triage Error:', error.message);
-    // If it's a parsing error or API error, throw it so the client handles it
+    console.error('OpenAI Triage Error:', error.message);
     throw error;
   }
 }
 
-// Fallback simulator for when GEMINI_API_KEY is not configured
+// Fallback simulator for when OPENAI_API_KEY is not configured
 function simulateTriageResult(currentSymptoms) {
   const symptomsLower = currentSymptoms.toLowerCase();
   let result = {
@@ -352,5 +352,5 @@ app.get('/api/health', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Medical Triage Server running on port ${PORT}`);
-  console.log(`Gemini API Client: ${apiKey !== 'mock-api-key' ? 'Enabled (Gemini)' : 'Mock Mode (Simulated)'}`);
+  console.log(`OpenAI API Client: ${apiKey !== 'mock-api-key' ? 'Enabled (OpenAI)' : 'Mock Mode (Simulated)'}`);
 });
