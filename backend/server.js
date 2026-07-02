@@ -17,6 +17,31 @@ const openai = new OpenAI({
   apiKey: apiKey === 'mock-api-key' ? 'dummy' : apiKey
 });
 
+// Initialize Twilio client
+const twilio = require('twilio');
+const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
+const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
+
+let twilioClient = null;
+if (
+  twilioAccountSid &&
+  twilioAccountSid !== 'your-twilio-account-sid-here' &&
+  twilioAccountSid.trim() !== '' &&
+  twilioAuthToken &&
+  twilioAuthToken !== 'your-twilio-auth-token-here' &&
+  twilioAuthToken.trim() !== ''
+) {
+  try {
+    twilioClient = twilio(twilioAccountSid, twilioAuthToken);
+    console.log('[TWILIO] Client initialized successfully.');
+  } catch (err) {
+    console.error('[TWILIO] Failed to initialize Twilio client:', err.message);
+  }
+} else {
+  console.log('[TWILIO] Credentials not fully configured. Running in Mock Mode.');
+}
+
 app.use(cors());
 app.use(express.json());
 
@@ -436,7 +461,7 @@ app.get('/api/queue/:department', (req, res) => {
 });
 
 // POST /api/appointments  ← STATELESS: all details come from the request body
-app.post('/api/appointments', (req, res) => {
+app.post('/api/appointments', async (req, res) => {
   const { patientId, patientPhone, doctorId, doctorName, slot,
           hospitalName, hospitalLocation, hospitalPhone } = req.body;
 
@@ -463,6 +488,35 @@ app.post('/api/appointments', (req, res) => {
   const smsMessage = `Hi ${patientId}, your appointment with ${resolvedDoctorName} at ${resolvedHospitalName} (${resolvedHospitalLoc}) for slot ${slot} is confirmed! Helpdesk: ${resolvedHospitalPhone}.`;
   console.log(`[SMS GATEWAY] Sending confirmation text to ${patientPhone}: ${smsMessage}`);
 
+  // Send real SMS if Twilio is configured
+  let twilioSmsSuccess = false;
+  let twilioSmsError = null;
+
+  if (twilioClient) {
+    try {
+      let recipientPhone = cleanPhone;
+      // Convert to E.164 format for Twilio (assumes Indian numbers +91)
+      if (!recipientPhone.startsWith('+')) {
+        if (recipientPhone.startsWith('0')) {
+          recipientPhone = '+91' + recipientPhone.substring(1);
+        } else {
+          recipientPhone = '+91' + recipientPhone;
+        }
+      }
+      
+      const message = await twilioClient.messages.create({
+        body: smsMessage,
+        from: twilioPhoneNumber,
+        to: recipientPhone
+      });
+      console.log(`[TWILIO] SMS successfully sent to ${recipientPhone}. Message SID: ${message.sid}`);
+      twilioSmsSuccess = true;
+    } catch (smsErr) {
+      console.error('[TWILIO] Failed to send SMS via Twilio:', smsErr.message);
+      twilioSmsError = smsErr.message;
+    }
+  }
+
   const appointment = {
     id:             `APT${Date.now()}`,
     patientId,
@@ -474,14 +528,17 @@ app.post('/api/appointments', (req, res) => {
     hospitalPhone:  resolvedHospitalPhone,
     slot,
     bookingDate:    new Date().toISOString(),
-    smsConfirmation: smsMessage
+    smsConfirmation: smsMessage,
+    realSmsStatus: twilioClient ? (twilioSmsSuccess ? 'Sent' : `Failed: ${twilioSmsError}`) : 'Mocked'
   };
 
   appointmentsDB.push(appointment);
 
   res.json({
     success: true,
-    message: `Appointment confirmed with ${resolvedDoctorName} at ${slot}. A confirmation SMS has been sent to ${patientPhone}.`,
+    message: twilioClient && !twilioSmsSuccess
+      ? `Appointment confirmed with ${resolvedDoctorName} at ${slot}. However, the SMS delivery failed: ${twilioSmsError}`
+      : `Appointment confirmed with ${resolvedDoctorName} at ${slot}. A confirmation SMS has been sent to ${patientPhone}.`,
     appointment
   });
 });
