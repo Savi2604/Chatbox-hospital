@@ -17,29 +17,51 @@ const openai = new OpenAI({
   apiKey: apiKey === 'mock-api-key' ? 'dummy' : apiKey
 });
 
-// Initialize Twilio client
-const twilio = require('twilio');
-const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
-const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
-const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
-
-let twilioClient = null;
-if (
-  twilioAccountSid &&
-  twilioAccountSid !== 'your-twilio-account-sid-here' &&
-  twilioAccountSid.trim() !== '' &&
-  twilioAuthToken &&
-  twilioAuthToken !== 'your-twilio-auth-token-here' &&
-  twilioAuthToken.trim() !== ''
-) {
-  try {
-    twilioClient = twilio(twilioAccountSid, twilioAuthToken);
-    console.log('[TWILIO] Client initialized successfully.');
-  } catch (err) {
-    console.error('[TWILIO] Failed to initialize Twilio client:', err.message);
-  }
+// Initialize Fast2SMS (Indian SMS Gateway)
+const https = require('https');
+const fast2smsApiKey = process.env.FAST2SMS_API_KEY;
+if (fast2smsApiKey && fast2smsApiKey.trim() !== '') {
+  console.log('[FAST2SMS] API Key loaded. SMS delivery enabled for Indian numbers.');
 } else {
-  console.log('[TWILIO] Credentials not fully configured. Running in Mock Mode.');
+  console.log('[FAST2SMS] API Key not configured. Running in Mock SMS Mode.');
+}
+
+// Helper: send SMS via Fast2SMS
+async function sendFast2SMS(phoneNumber, message) {
+  return new Promise((resolve, reject) => {
+    // Strip country code — Fast2SMS needs plain 10-digit number
+    const mobile = phoneNumber.replace(/^\+91/, '').replace(/^0/, '').replace(/\D/g, '');
+    const params = new URLSearchParams({
+      authorization: fast2smsApiKey,
+      route: 'q',
+      message: message,
+      language: 'english',
+      flash: '0',
+      numbers: mobile
+    });
+    const options = {
+      hostname: 'www.fast2sms.com',
+      path: `/dev/bulkV2?${params.toString()}`,
+      method: 'GET',
+      headers: { 'cache-control': 'no-cache' }
+    };
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.return === true) {
+            resolve(json);
+          } else {
+            reject(new Error(JSON.stringify(json.message || json)));
+          }
+        } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
 }
 
 app.use(cors());
@@ -488,33 +510,21 @@ app.post('/api/appointments', async (req, res) => {
   const smsMessage = `Hi ${patientId}, your appointment with ${resolvedDoctorName} at ${resolvedHospitalName} (${resolvedHospitalLoc}) for slot ${slot} is confirmed! Helpdesk: ${resolvedHospitalPhone}.`;
   console.log(`[SMS GATEWAY] Sending confirmation text to ${patientPhone}: ${smsMessage}`);
 
-  // Send real SMS if Twilio is configured
-  let twilioSmsSuccess = false;
-  let twilioSmsError = null;
+  // Send real SMS via Fast2SMS (Indian SMS Gateway)
+  let smsSent = false;
+  let smsError = null;
 
-  if (twilioClient) {
+  if (fast2smsApiKey && fast2smsApiKey.trim() !== '') {
     try {
-      let recipientPhone = cleanPhone;
-      // Convert to E.164 format for Twilio (assumes Indian numbers +91)
-      if (!recipientPhone.startsWith('+')) {
-        if (recipientPhone.startsWith('0')) {
-          recipientPhone = '+91' + recipientPhone.substring(1);
-        } else {
-          recipientPhone = '+91' + recipientPhone;
-        }
-      }
-      
-      const message = await twilioClient.messages.create({
-        body: smsMessage,
-        from: twilioPhoneNumber,
-        to: recipientPhone
-      });
-      console.log(`[TWILIO] SMS successfully sent to ${recipientPhone}. Message SID: ${message.sid}`);
-      twilioSmsSuccess = true;
+      const result = await sendFast2SMS(cleanPhone, smsMessage);
+      console.log(`[FAST2SMS] SMS sent successfully to ${cleanPhone}:`, result.message);
+      smsSent = true;
     } catch (smsErr) {
-      console.error('[TWILIO] Failed to send SMS via Twilio:', smsErr.message);
-      twilioSmsError = smsErr.message;
+      console.error('[FAST2SMS] Failed to send SMS:', smsErr.message);
+      smsError = smsErr.message;
     }
+  } else {
+    console.log('[FAST2SMS] Skipping real SMS — API key not configured.');
   }
 
   const appointment = {
@@ -529,15 +539,15 @@ app.post('/api/appointments', async (req, res) => {
     slot,
     bookingDate:    new Date().toISOString(),
     smsConfirmation: smsMessage,
-    realSmsStatus: twilioClient ? (twilioSmsSuccess ? 'Sent' : `Failed: ${twilioSmsError}`) : 'Mocked'
+    realSmsStatus: fast2smsApiKey ? (smsSent ? 'Sent via Fast2SMS' : `Failed: ${smsError}`) : 'Mocked'
   };
 
   appointmentsDB.push(appointment);
 
   res.json({
     success: true,
-    message: twilioClient && !twilioSmsSuccess
-      ? `Appointment confirmed with ${resolvedDoctorName} at ${slot}. However, the SMS delivery failed: ${twilioSmsError}`
+    message: fast2smsApiKey && !smsSent
+      ? `Appointment confirmed with ${resolvedDoctorName} at ${slot}. However, the SMS delivery failed: ${smsError}`
       : `Appointment confirmed with ${resolvedDoctorName} at ${slot}. A confirmation SMS has been sent to ${patientPhone}.`,
     appointment
   });
