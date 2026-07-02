@@ -1,7 +1,168 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+// ── Severity helpers ────────────────────────────────────────────────────────
+const SEVERITY_CONFIG = {
+  High: {
+    label: 'CRITICAL',
+    color: '#dc2626',
+    bgGradient: 'linear-gradient(135deg, #7f1d1d 0%, #991b1b 50%, #b91c1c 100%)',
+    glowColor: 'rgba(220, 38, 38, 0.45)',
+    borderColor: '#ef4444',
+    icon: '🚨',
+    badgeClass: 'severity-badge-high',
+  },
+  Medium: {
+    label: 'MODERATE',
+    color: '#d97706',
+    bgGradient: 'linear-gradient(135deg, #78350f 0%, #92400e 50%, #b45309 100%)',
+    glowColor: 'rgba(217, 119, 6, 0.35)',
+    borderColor: '#f59e0b',
+    icon: '⚠️',
+    badgeClass: 'severity-badge-medium',
+  },
+  Low: {
+    label: 'STABLE',
+    color: '#059669',
+    bgGradient: 'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%)',
+    glowColor: 'rgba(5, 150, 105, 0.3)',
+    borderColor: '#10b981',
+    icon: '✅',
+    badgeClass: 'severity-badge-low',
+  },
+};
+
+// ── ETA Countdown Clock ─────────────────────────────────────────────────────
+function EtaCountdown({ initialMins, severity }) {
+  const [secsLeft, setSecsLeft] = useState(initialMins * 60);
+  const intervalRef = useRef(null);
+
+  useEffect(() => {
+    setSecsLeft(initialMins * 60);
+  }, [initialMins]);
+
+  useEffect(() => {
+    if (secsLeft <= 0) return;
+    intervalRef.current = setInterval(() => {
+      setSecsLeft(s => Math.max(0, s - 1));
+    }, 1000);
+    return () => clearInterval(intervalRef.current);
+  }, [secsLeft]);
+
+  const mins = Math.floor(secsLeft / 60);
+  const secs = secsLeft % 60;
+  const cfg  = SEVERITY_CONFIG[severity] || SEVERITY_CONFIG.Low;
+
+  if (initialMins === 0) {
+    return (
+      <div className="eta-clock eta-immediate">
+        <div className="eta-pulse-ring" />
+        <span className="eta-now-label">⚡ IMMEDIATE</span>
+        <span className="eta-now-sub">Emergency override active</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="eta-clock" style={{ '--glow': cfg.glowColor }}>
+      <div className="eta-digits">
+        <span className="eta-num">{String(mins).padStart(2, '0')}</span>
+        <span className="eta-colon">:</span>
+        <span className="eta-num">{String(secs).padStart(2, '0')}</span>
+      </div>
+      <span className="eta-label">
+        {secsLeft === 0 ? 'Your Turn — Please Proceed' : 'Estimated Wait Time'}
+      </span>
+    </div>
+  );
+}
+
+// ── Triage Dashboard Banner ─────────────────────────────────────────────────
+function TriageDashboard({ severity, queueInfo, patientId }) {
+  const cfg = SEVERITY_CONFIG[severity] || SEVERITY_CONFIG.Low;
+
+  return (
+    <div className={`triage-dashboard ${severity === 'High' ? 'triage-dashboard--critical' : ''}`}
+         style={{ '--severity-glow': cfg.glowColor, '--severity-border': cfg.borderColor }}>
+
+      {/* Top urgency banner for High severity */}
+      {severity === 'High' && (
+        <div className="urgency-banner" role="alert" aria-live="assertive">
+          <span className="urgency-pulse" />
+          <span className="urgency-icon">🚨</span>
+          <div className="urgency-text">
+            <strong>Urgent Triage Case Detected</strong>
+            <span>Slot dynamically advanced by Priority Routing System</span>
+          </div>
+          <span className="urgency-badge">PRIORITY #1</span>
+        </div>
+      )}
+
+      <div className="triage-dashboard__body">
+        {/* Token & severity strip */}
+        <div className="triage-token-strip">
+          <div className="token-card">
+            <span className="token-label">Queue Token</span>
+            <span className="token-number" style={{ color: cfg.color }}>
+              {queueInfo.priorityOverride ? 'PRIORITY' : `#${queueInfo.tokenNumber}`}
+            </span>
+          </div>
+
+          <div className="severity-pill-wrap">
+            <div className={`severity-pill ${cfg.badgeClass}`}>
+              <span>{cfg.icon}</span>
+              <span>{cfg.label}</span>
+            </div>
+            <span className="severity-sublabel">Risk Level</span>
+          </div>
+
+          <div className="token-card">
+            <span className="token-label">Queue Position</span>
+            <span className="token-number" style={{ color: cfg.color }}>
+              {queueInfo.queuePosition} / {queueInfo.totalInQueue}
+            </span>
+          </div>
+        </div>
+
+        {/* ETA Clock */}
+        <div className="eta-section">
+          <EtaCountdown initialMins={queueInfo.estimatedWaitMins} severity={severity} />
+          {severity !== 'High' && (
+            <p className="eta-compare">
+              <span className="eta-compare--standard">Standard wait for routine checkup:</span>
+              <strong>~{queueInfo.totalInQueue * 15} mins</strong>
+            </p>
+          )}
+          {severity === 'High' && (
+            <p className="eta-override-note">
+              ⚡ Your position was automatically advanced to the front of the queue. All other patients have been notified of their updated ETAs.
+            </p>
+          )}
+        </div>
+
+        {/* Live queue visualiser */}
+        <div className="queue-track">
+          <span className="queue-track__label">Live Queue Position</span>
+          <div className="queue-dots">
+            {Array.from({ length: Math.min(queueInfo.totalInQueue, 10) }).map((_, i) => (
+              <div
+                key={i}
+                className={`queue-dot ${i === queueInfo.queuePosition - 1 ? 'queue-dot--active' : ''} ${severity === 'High' && i === 0 ? 'queue-dot--urgent' : ''}`}
+                title={i === queueInfo.queuePosition - 1 ? `${patientId} — You` : `Patient ${i + 1}`}
+              />
+            ))}
+            {queueInfo.totalInQueue > 10 && (
+              <span className="queue-overflow">+{queueInfo.totalInQueue - 10}</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main App ────────────────────────────────────────────────────────────────
 function App() {
   const [patientId, setPatientId]     = useState('');
   const [symptoms, setSymptoms]       = useState('');
@@ -112,6 +273,8 @@ function App() {
           hospitalLocation: selectedSlot.hospitalLocation,
           hospitalPhone:    selectedSlot.hospitalPhone,
           patientPhone:     patientPhone.trim(),
+          severity:         triageResult?.severity || 'Low',
+          queueInfo:        triageResult?.queueInfo || null,
           message:          data.message,
         });
         setSelectedSlot(null);
@@ -146,8 +309,16 @@ function App() {
   return (
     <div className="app-container">
       <header className="app-header">
-        <h1>Medical Triage System</h1>
-        <p>Intelligent Patient Routing &amp; Appointment Scheduling</p>
+        <div className="header-inner">
+          <div className="header-logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="header-logo-icon">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+            <span>MediTriage AI</span>
+          </div>
+          <h1>Intelligent Dynamic Queue-Time Triage</h1>
+          <p>Priority Routing · Real-Time ETA · Severity Intelligence</p>
+        </div>
       </header>
 
       <main className="main-content">
@@ -183,6 +354,17 @@ function App() {
               <p className="confirmed-sub">
                 Your appointment has been successfully booked. A confirmation SMS has been sent to your mobile.
               </p>
+
+              {/* Severity badge on confirmation */}
+              {confirmedAppointment.severity && (
+                <div className={`confirmed-severity-badge ${SEVERITY_CONFIG[confirmedAppointment.severity]?.badgeClass || ''}`}>
+                  <span>{SEVERITY_CONFIG[confirmedAppointment.severity]?.icon}</span>
+                  <span>Risk Level: {SEVERITY_CONFIG[confirmedAppointment.severity]?.label}</span>
+                  {confirmedAppointment.severity === 'High' && (
+                    <span className="priority-tag">⚡ PRIORITY QUEUE</span>
+                  )}
+                </div>
+              )}
 
               {/* Booking details with staggered animations */}
               <div className="confirmed-details">
@@ -222,6 +404,33 @@ function App() {
                   </div>
                 </div>
               </div>
+
+              {/* Queue info summary on confirmation */}
+              {confirmedAppointment.queueInfo && (
+                <div className="confirmed-queue-summary fade-row" style={{ animationDelay: '0.6s' }}>
+                  <div className="cqs-item">
+                    <span className="cqs-icon">🎫</span>
+                    <div>
+                      <span className="cqs-label">Queue Token</span>
+                      <strong>{confirmedAppointment.queueInfo.priorityOverride ? 'PRIORITY' : `#${confirmedAppointment.queueInfo.tokenNumber}`}</strong>
+                    </div>
+                  </div>
+                  <div className="cqs-item">
+                    <span className="cqs-icon">⏱️</span>
+                    <div>
+                      <span className="cqs-label">Wait Time</span>
+                      <strong>{confirmedAppointment.queueInfo.estimatedWaitMins === 0 ? 'Immediate' : `~${confirmedAppointment.queueInfo.estimatedWaitMins} mins`}</strong>
+                    </div>
+                  </div>
+                  <div className="cqs-item">
+                    <span className="cqs-icon">👥</span>
+                    <div>
+                      <span className="cqs-label">Position</span>
+                      <strong>{confirmedAppointment.queueInfo.queuePosition} of {confirmedAppointment.queueInfo.totalInQueue}</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Simulated Phone SMS Preview */}
               <div className="phone-sms-preview fade-row" style={{ animationDelay: '0.7s' }}>
@@ -284,11 +493,12 @@ function App() {
                     rows="4"
                     required
                   />
+                  <small className="hint">💡 Tip: Mention severity (e.g., "severe", "mild") to trigger priority routing.</small>
                 </div>
 
                 <div className="form-actions">
                   <button type="submit" disabled={loading} className="btn-primary">
-                    {loading ? 'Processing...' : 'Get Triage Recommendation'}
+                    {loading ? 'Processing...' : '🔍 Analyse & Route Patient'}
                   </button>
                   {patientData && (
                     <button type="button" onClick={resetAll} className="btn-secondary">
@@ -315,51 +525,69 @@ function App() {
               <section className="loading-section">
                 <div className="loading-spinner">
                   <div className="spinner-icon"></div>
-                  <p>Analyzing symptoms and finding premium healthcare recommendations...</p>
+                  <p>Analysing symptoms and computing priority routing...</p>
                 </div>
               </section>
             )}
 
             {/* TRIAGE RESULT */}
             {patientData && triageResult && (
-              <section className="recommendation-section">
-                <div className="patient-card">
-                  <h2>Patient Information</h2>
-                  <div className="patient-details">
-                    <p><strong>Name:</strong> {patientData.name}</p>
-                    <p><strong>ID:</strong> {patientData.id}</p>
-                    <p><strong>Medical History:</strong></p>
-                    <ul>
-                      {patientData.history.length > 0
-                        ? patientData.history.map((c, i) => <li key={i}>{c}</li>)
-                        : <li>No recorded history</li>}
-                    </ul>
-                  </div>
-                </div>
+              <>
+                {/* ── INTELLIGENT TRIAGE DASHBOARD ── */}
+                {triageResult.queueInfo && (
+                  <TriageDashboard
+                    severity={triageResult.severity}
+                    queueInfo={triageResult.queueInfo}
+                    patientId={patientId}
+                  />
+                )}
 
-                <div className="recommendation-card">
-                  <div className="recommendation-header">
-                    <h2>Triage Recommendation</h2>
-                    <span className="department-badge">{triageResult.department}</span>
-                  </div>
-                  <div className="recommendation-reason">
-                    <p><strong>AI Analysis &amp; Clinical Justification:</strong></p>
-                    <p>{triageResult.reasoning}</p>
-                  </div>
-                  {triageResult.recommendedHospital && (
-                    <div className="hospital-info">
-                      <div className="hospital-title">
-                        <svg className="hospital-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                        </svg>
-                        <span>{triageResult.recommendedHospital}</span>
-                      </div>
-                      <p><strong>Location:</strong> {triageResult.hospitalLocation}</p>
-                      <p><strong>Contact Hotline:</strong> {triageResult.hospitalPhone}</p>
+                <section className="recommendation-section">
+                  <div className="patient-card">
+                    <h2>Patient Information</h2>
+                    <div className="patient-details">
+                      <p><strong>Name:</strong> {patientData.name}</p>
+                      <p><strong>ID:</strong> {patientData.id}</p>
+                      <p><strong>Medical History:</strong></p>
+                      <ul>
+                        {patientData.history.length > 0
+                          ? patientData.history.map((c, i) => <li key={i}>{c}</li>)
+                          : <li>No recorded history</li>}
+                      </ul>
                     </div>
-                  )}
-                </div>
-              </section>
+                  </div>
+
+                  <div className="recommendation-card">
+                    <div className="recommendation-header">
+                      <h2>Triage Recommendation</h2>
+                      <div className="rec-badges">
+                        <span className="department-badge">{triageResult.department}</span>
+                        {triageResult.severity && (
+                          <span className={`severity-badge-inline ${SEVERITY_CONFIG[triageResult.severity]?.badgeClass}`}>
+                            {SEVERITY_CONFIG[triageResult.severity]?.icon} {SEVERITY_CONFIG[triageResult.severity]?.label}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="recommendation-reason">
+                      <p><strong>AI Analysis &amp; Clinical Justification:</strong></p>
+                      <p>{triageResult.reasoning}</p>
+                    </div>
+                    {triageResult.recommendedHospital && (
+                      <div className="hospital-info">
+                        <div className="hospital-title">
+                          <svg className="hospital-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                          </svg>
+                          <span>{triageResult.recommendedHospital}</span>
+                        </div>
+                        <p><strong>Location:</strong> {triageResult.hospitalLocation}</p>
+                        <p><strong>Contact Hotline:</strong> {triageResult.hospitalPhone}</p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </>
             )}
 
             {/* DOCTOR SLOTS */}
@@ -368,7 +596,7 @@ function App() {
                 <h2>Available Specialists ({triageResult.department})</h2>
                 <div className="doctors-grid">
                   {triageResult.doctors.map((doctor) => (
-                    <div key={doctor.id} className="doctor-card">
+                    <div key={doctor.id} className={`doctor-card ${triageResult.severity === 'High' ? 'doctor-card--urgent' : ''}`}>
                       <div className="doctor-info">
                         <div className="doctor-avatar">
                           {doctor.name.split(' ').slice(1).map(n => n[0]).join('')}
@@ -380,10 +608,14 @@ function App() {
                         </div>
                       </div>
                       <div className="slots-grid">
-                        <h4>Available Time Slots</h4>
+                        <h4>
+                          {triageResult.severity === 'High'
+                            ? '⚡ Priority Time Slots'
+                            : 'Available Time Slots'}
+                        </h4>
                         <div className="slots-container">
                           {doctor.slots.length > 0
-                            ? doctor.slots.map((slot) => (
+                            ? doctor.slots.map((slot, idx) => (
                                 <button
                                   key={slot}
                                   onClick={() => {
@@ -398,8 +630,9 @@ function App() {
                                       hospitalPhone:    triageResult.hospitalPhone,
                                     });
                                   }}
-                                  className="slot-button"
+                                  className={`slot-button ${triageResult.severity === 'High' && idx === 0 ? 'slot-button--priority' : ''}`}
                                 >
+                                  {triageResult.severity === 'High' && idx === 0 && <span className="slot-priority-tag">⚡</span>}
                                   {slot}
                                 </button>
                               ))
@@ -426,6 +659,13 @@ function App() {
               <p>Enter your mobile number to confirm this appointment</p>
             </div>
 
+            {/* High severity alert in checkout modal */}
+            {triageResult?.severity === 'High' && (
+              <div className="checkout-urgency-alert">
+                🚨 <strong>Priority Booking</strong> — Your slot has been advanced to front of queue by the Priority Routing System.
+              </div>
+            )}
+
             <div className="checkout-summary-box">
               <div className="summary-item">
                 <span className="summary-label">Doctor</span>
@@ -447,6 +687,16 @@ function App() {
                 <span className="summary-label">Time Slot</span>
                 <span className="summary-badge">{selectedSlot.slot}</span>
               </div>
+              {triageResult?.queueInfo && (
+                <div className="summary-item">
+                  <span className="summary-label">Wait Time</span>
+                  <span className="summary-badge" style={{ background: triageResult.severity === 'High' ? '#fef2f2' : undefined }}>
+                    {triageResult.queueInfo.estimatedWaitMins === 0
+                      ? '⚡ Immediate'
+                      : `~${triageResult.queueInfo.estimatedWaitMins} mins`}
+                  </span>
+                </div>
+              )}
             </div>
 
             <form onSubmit={submitBooking} className="checkout-form">
@@ -487,7 +737,7 @@ function App() {
       )}
 
       <footer className="app-footer">
-        <p>&copy; 2026 Medical Triage System. All rights reserved.</p>
+        <p>&copy; 2026 MediTriage AI — Intelligent Dynamic Queue-Time Triage System. All rights reserved.</p>
       </footer>
     </div>
   );

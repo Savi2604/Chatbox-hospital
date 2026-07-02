@@ -29,6 +29,86 @@ const patientsDB = {
 
 const appointmentsDB = [];
 
+// ─── DYNAMIC QUEUE STATE ENGINE ───────────────────────────────────────────────
+// In-memory department queue: stores active queue entries per department
+// Each entry: { patientId, tokenNumber, slotTime, estimatedWaitMins, severity, isHighPriority }
+const departmentQueues = {};
+
+/**
+ * Initialises the queue for a department if not present, and adds a new patient.
+ * For HIGH severity: hijacks the front of the queue and recalibrates ETAs.
+ * For LOW/MEDIUM: appends sequentially.
+ * Returns { tokenNumber, estimatedWaitMins, queuePosition, totalInQueue, queueSnapshot }
+ */
+function processQueueEntry(department, patientId, severity) {
+  if (!departmentQueues[department]) {
+    departmentQueues[department] = [];
+  }
+
+  const queue = departmentQueues[department];
+  const BASE_CONSULT_MINS = 15; // average consultation time per patient in minutes
+
+  if (severity === 'High') {
+    // ── Priority Hijack Algorithm ──────────────────────────────────────────
+    // Assign token #0 (emergency override) and insert at front
+    const priorityToken = 0;
+    const urgentEntry = {
+      patientId,
+      tokenNumber: priorityToken,
+      severity,
+      isHighPriority: true,
+      issuedAt: Date.now(),
+      estimatedWaitMins: 0, // immediate
+    };
+
+    // Re-number all existing queue entries: everyone shifts back by 1 slot
+    queue.forEach((entry, idx) => {
+      entry.tokenNumber = idx + 1;
+      // Recalibrate: each patient now waits BASE_CONSULT_MINS more due to emergency insertion
+      entry.estimatedWaitMins = (idx + 1) * BASE_CONSULT_MINS;
+    });
+
+    // Insert high-priority patient at position 0
+    queue.unshift(urgentEntry);
+
+    console.log(`[QUEUE ENGINE] 🚨 HIGH SEVERITY override for ${patientId} in ${department}. Queue recalibrated.`);
+
+    return {
+      tokenNumber: priorityToken,
+      estimatedWaitMins: 0,
+      queuePosition: 1,
+      totalInQueue: queue.length,
+      queueSnapshot: queue.map(e => ({ ...e })),
+      priorityOverride: true,
+    };
+
+  } else {
+    // ── Standard Sequential Booking (Low / Medium) ─────────────────────────
+    const position = queue.length + 1;
+    const estimatedWaitMins = position * BASE_CONSULT_MINS;
+    const newEntry = {
+      patientId,
+      tokenNumber: position,
+      severity,
+      isHighPriority: false,
+      issuedAt: Date.now(),
+      estimatedWaitMins,
+    };
+    queue.push(newEntry);
+
+    console.log(`[QUEUE ENGINE] ${severity} patient ${patientId} queued at position ${position} in ${department}. ETA: ${estimatedWaitMins} mins.`);
+
+    return {
+      tokenNumber: position,
+      estimatedWaitMins,
+      queuePosition: position,
+      totalInQueue: queue.length,
+      queueSnapshot: queue.map(e => ({ ...e })),
+      priorityOverride: false,
+    };
+  }
+}
+
 // HELPER TO DYNAMICALLY SPAWN INDIAN DOCTOR PROFILES
 function spawnDynamicDoctors(department, hospitalName, hospitalLocation, hospitalPhone) {
   const firstNames  = ['Rajesh','Amit','Sanjay','Vikram','Priya','Anjali','Sunita','Meera','Arjun','Deepak','Vijay','Sneha','Rohan','Neha','Kavitha','Suresh'];
@@ -123,6 +203,49 @@ function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// SEVERITY MATRIX: maps symptom keywords → severity level
+function determineSeverityFromSymptoms(symptoms) {
+  const s = symptoms.toLowerCase();
+
+  // HIGH severity — life-threatening / acute emergency indicators
+  const highKeywords = [
+    'severe chest pain', 'heart attack', 'cardiac arrest', 'stroke', 'paralysis',
+    'loss of consciousness', 'unconscious', 'unresponsive', 'seizure', 'convulsion',
+    'anaphylaxis', 'anaphylactic', 'severe allergic', 'difficulty breathing', 'cannot breathe',
+    'choking', 'acute', 'crushing chest', 'radiating pain', 'jaw pain', 'left arm pain',
+    'sudden blindness', 'sudden vision loss', 'high fever above 104', 'sepsis', 'septic',
+    'heavy bleeding', 'uncontrolled bleeding', 'suicidal', 'overdose', 'poisoning',
+    'severe trauma', 'multiple trauma', 'head injury', 'spinal injury', 'respiratory failure',
+    'shortness of breath', 'severe breathlessness', 'oxygen', 'cannot walk', 'sudden weakness',
+    'fainting', 'syncope', 'tachycardia', 'arrhythmia', 'severe hypertension', 'crisis'
+  ];
+
+  // MEDIUM severity — concerning but not immediately life-threatening
+  const mediumKeywords = [
+    'chest pain', 'chest tightness', 'moderate pain', 'palpitation', 'elevated blood pressure',
+    'blood pressure', 'hypertension', 'persistent cough', 'high fever', 'fever above 102',
+    'vomiting', 'diarrhea', 'abdominal pain', 'stomach pain', 'lower back pain',
+    'urinary infection', 'uti', 'kidney pain', 'swelling', 'inflammation', 'joint pain',
+    'blurred vision', 'eye pain', 'rash', 'allergic reaction', 'moderate bleeding',
+    'irregular heartbeat', 'dizziness', 'vertigo', 'migraine', 'severe headache',
+    'pregnancy complication', 'discharge', 'menstrual pain', 'cramps', 'breathless',
+    'wheez', 'asthma attack', 'blood in urine', 'blood in stool', 'nausea'
+  ];
+
+  // Check HIGH first (most critical)
+  for (const keyword of highKeywords) {
+    if (s.includes(keyword)) return 'High';
+  }
+
+  // Check MEDIUM
+  for (const keyword of mediumKeywords) {
+    if (s.includes(keyword)) return 'Medium';
+  }
+
+  // Default LOW
+  return 'Low';
+}
+
 // COMPREHENSIVE SYMPTOM -> DEPARTMENT/HOSPITAL MAPPING
 function simulateTriageResult(currentSymptoms) {
   const s = currentSymptoms.toLowerCase();
@@ -170,9 +293,11 @@ function simulateTriageResult(currentSymptoms) {
     reasoning  = 'General symptoms detected. Routed to General Medicine for baseline evaluation and treatment.';
   }
 
+  const severity = determineSeverityFromSymptoms(currentSymptoms);
+
   // Randomly pick a hospital from the pool for this department
   const hospital = pickRandom(hospitalPools[department]);
-  return { department, reasoning, ...hospital };
+  return { department, reasoning, severity, ...hospital };
 }
 
 // LIVE LLM PIPELINE USING OPENAI (with graceful fallback)
@@ -183,13 +308,19 @@ async function getAIRecommendation(history, currentSymptoms) {
   }
 
   try {
-    const systemInstruction = `You are a medical triage AI assistant. Analyze patient symptoms and medical history to recommend the appropriate medical department.
+    const systemInstruction = `You are a medical triage AI assistant. Analyze patient symptoms and medical history to recommend the appropriate medical department and assess the severity of the patient's condition.
 Available departments: Cardiology, Gynecology, Pulmonology, Ophthalmology, General Medicine.
+
+Severity Level Definitions (STRICT — use only these three):
+- "High": Life-threatening or acute emergency (e.g. severe chest pain, stroke, seizure, anaphylaxis, respiratory failure, severe trauma).
+- "Medium": Concerning but not immediately life-threatening (e.g. moderate pain, elevated blood pressure, persistent fever, vomiting, moderate allergic reaction).
+- "Low": Mild, non-urgent symptoms (e.g. mild cold, minor body ache, routine check-up, minor skin rash).
 
 Output ONLY a raw JSON object — no markdown, no extra text — matching this structure exactly:
 {
   "department": "one of the five departments above",
   "reasoning": "Clinical justification mapping the submitted symptoms.",
+  "severity": "High | Medium | Low",
   "recommendedHospital": "Realistic premium hospital name in India.",
   "hospitalLocation": "Realistic specific metro city branch/address in India.",
   "hospitalPhone": "Realistic Indian hospital helpline number in format +91 XX XXXX XXXX"
@@ -224,7 +355,13 @@ Provide the triage recommendation as a raw JSON object.`;
     const parsed = JSON.parse(cleaned);
 
     const validDepts = ['Cardiology', 'Gynecology', 'Pulmonology', 'Ophthalmology', 'General Medicine'];
-    if (!parsed.department || !validDepts.includes(parsed.department)) parsed.department = 'General Medicine';
+    const validSeverities = ['High', 'Medium', 'Low'];
+
+    if (!parsed.department || !validDepts.includes(parsed.department))    parsed.department = 'General Medicine';
+    if (!parsed.severity   || !validSeverities.includes(parsed.severity)) {
+      // Fallback: derive severity from symptoms locally if AI omits it
+      parsed.severity = determineSeverityFromSymptoms(currentSymptoms);
+    }
     if (!parsed.reasoning)           throw new Error('Missing reasoning field');
     if (!parsed.recommendedHospital) throw new Error('Missing recommendedHospital field');
     if (!parsed.hospitalLocation)    throw new Error('Missing hospitalLocation field');
@@ -261,21 +398,41 @@ app.post('/api/triage', async (req, res) => {
       recommendation.hospitalPhone
     );
 
+    // ── Process Dynamic Queue Triage ──────────────────────────────────────
+    const severity = recommendation.severity || 'Low';
+    const queueInfo = processQueueEntry(recommendation.department, patientId, severity);
+
     res.json({
       patient,
       triageResult: {
         department:          recommendation.department,
         reasoning:           recommendation.reasoning,
+        severity:            severity,
         recommendedHospital: recommendation.recommendedHospital,
         hospitalLocation:    recommendation.hospitalLocation,
         hospitalPhone:       recommendation.hospitalPhone,
-        doctors
+        doctors,
+        // ── Queue Intelligence Payload ─────────────────────────────────
+        queueInfo: {
+          tokenNumber:      queueInfo.tokenNumber,
+          estimatedWaitMins: queueInfo.estimatedWaitMins,
+          queuePosition:    queueInfo.queuePosition,
+          totalInQueue:     queueInfo.totalInQueue,
+          priorityOverride: queueInfo.priorityOverride,
+        }
       }
     });
   } catch (err) {
     console.error('Triage Error:', err);
     res.status(500).json({ error: 'Failed to process triage request: ' + err.message });
   }
+});
+
+// GET /api/queue/:department  — expose live queue for a department
+app.get('/api/queue/:department', (req, res) => {
+  const dept = req.params.department;
+  const queue = departmentQueues[dept] || [];
+  res.json({ department: dept, totalInQueue: queue.length, queue });
 });
 
 // POST /api/appointments  ← STATELESS: all details come from the request body
