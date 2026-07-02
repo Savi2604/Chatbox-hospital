@@ -47,11 +47,11 @@ function spawnDynamicDoctors(department, hospitalName, hospitalLocation, hospita
   const doctors = [];
 
   const slotSequences = [
-    ['09:00', '11:15', '14:30'],
-    ['10:00', '12:30', '15:15', '16:45'],
-    ['08:30', '11:00', '13:45', '15:30'],
-    ['09:30', '12:00', '14:15', '16:00'],
-    ['11:15', '14:30', '17:00']
+    ['09:00 AM', '11:15 AM', '02:30 PM'],
+    ['10:00 AM', '12:30 PM', '03:15 PM', '04:45 PM'],
+    ['08:30 AM', '11:00 AM', '01:45 PM', '03:30 PM'],
+    ['09:30 AM', '12:00 PM', '02:15 PM', '04:00 PM'],
+    ['11:15 AM', '02:30 PM', '05:00 PM']
   ];
 
   for (let i = 0; i < count; i++) {
@@ -75,77 +75,104 @@ function spawnDynamicDoctors(department, hospitalName, hospitalLocation, hospita
   return doctors;
 }
 
+// HOSPITAL POOLS — multiple options per department, randomly selected each call
+const hospitalPools = {
+  Cardiology: [
+    { recommendedHospital: 'Fortis Escorts Heart Institute',         hospitalLocation: 'Okhla Road, New Delhi, Delhi – 110025',              hospitalPhone: '+91 11 4713 5000' },
+    { recommendedHospital: 'Apollo Hospitals – Cardiology Centre',   hospitalLocation: 'Jubilee Hills, Hyderabad, Telangana – 500033',        hospitalPhone: '+91 40 2360 7777' },
+    { recommendedHospital: 'Narayana Institute of Cardiac Sciences', hospitalLocation: 'Bommasandra, Bengaluru, Karnataka – 560099',          hospitalPhone: '+91 80 7122 2200' },
+    { recommendedHospital: 'Medanta Heart Institute',                hospitalLocation: 'Sector 38, Gurugram, Haryana – 122001',               hospitalPhone: '+91 124 414 1414' },
+    { recommendedHospital: 'SIMS Hospital – Heart Care',             hospitalLocation: 'Vadapalani, Chennai, Tamil Nadu – 600026',            hospitalPhone: '+91 44 4396 4000' },
+    { recommendedHospital: 'Kokilaben Dhirubhai Ambani Hospital',    hospitalLocation: 'Andheri West, Mumbai, Maharashtra – 400053',          hospitalPhone: '+91 22 4269 6969' },
+  ],
+  Gynecology: [
+    { recommendedHospital: 'Apollo Cradle & Childrens Hospital',     hospitalLocation: 'Koramangala, Bengaluru, Karnataka – 560034',          hospitalPhone: '+91 80 4424 4424' },
+    { recommendedHospital: 'Fortis La Femme',                        hospitalLocation: 'Greater Kailash, New Delhi, Delhi – 110048',          hospitalPhone: '+91 11 4211 7777' },
+    { recommendedHospital: 'Cloudnine Hospital',                     hospitalLocation: 'Malleswaram, Bengaluru, Karnataka – 560003',          hospitalPhone: '+91 80 6674 1000' },
+    { recommendedHospital: 'Surya Mother & Child Super Speciality',  hospitalLocation: 'Wakad, Pune, Maharashtra – 411057',                   hospitalPhone: '+91 20 6727 5000' },
+    { recommendedHospital: 'Motherhood Hospital',                    hospitalLocation: 'Indiranagar, Bengaluru, Karnataka – 560038',          hospitalPhone: '+91 80 6741 8000' },
+    { recommendedHospital: 'Rainbow Childrens Hospital',             hospitalLocation: 'Banjara Hills, Hyderabad, Telangana – 500034',        hospitalPhone: '+91 40 4477 0000' },
+  ],
+  Pulmonology: [
+    { recommendedHospital: 'Medanta – Chest & Respiratory Sciences', hospitalLocation: 'Sector 38, Gurugram, Haryana – 122001',               hospitalPhone: '+91 124 414 1414' },
+    { recommendedHospital: 'Hinduja Hospital – Pulmonology',         hospitalLocation: 'Mahim, Mumbai, Maharashtra – 400016',                 hospitalPhone: '+91 22 2445 2222' },
+    { recommendedHospital: 'KIMS Hospital – Respiratory Dept.',      hospitalLocation: 'Secunderabad, Hyderabad, Telangana – 500003',         hospitalPhone: '+91 40 4488 5000' },
+    { recommendedHospital: 'Manipal Hospital – Pulmonology Wing',    hospitalLocation: 'HAL Airport Road, Bengaluru, Karnataka – 560017',     hospitalPhone: '+91 80 2502 4444' },
+    { recommendedHospital: 'Chest Research Foundation Hospital',     hospitalLocation: 'Pune – Satara Road, Pune, Maharashtra – 411009',      hospitalPhone: '+91 20 2422 5555' },
+    { recommendedHospital: 'Apollo Hospitals – Pulmonology',         hospitalLocation: 'Greams Road, Chennai, Tamil Nadu – 600006',           hospitalPhone: '+91 44 2829 0200' },
+  ],
+  Ophthalmology: [
+    { recommendedHospital: 'Sankara Nethralaya Eye Hospital',        hospitalLocation: 'Nungambakkam, Chennai, Tamil Nadu – 600006',          hospitalPhone: '+91 44 2827 1616' },
+    { recommendedHospital: 'Aravind Eye Hospital',                   hospitalLocation: 'Anna Nagar, Madurai, Tamil Nadu – 625020',            hospitalPhone: '+91 452 4356 100' },
+    { recommendedHospital: 'LV Prasad Eye Institute',                hospitalLocation: 'Banjara Hills, Hyderabad, Telangana – 500034',        hospitalPhone: '+91 40 3061 2222' },
+    { recommendedHospital: 'Dr. Shroffs Charity Eye Hospital',       hospitalLocation: 'Daryaganj, New Delhi, Delhi – 110002',               hospitalPhone: '+91 11 4352 4444' },
+    { recommendedHospital: 'Narayana Nethralaya',                    hospitalLocation: 'Rajajinagar, Bengaluru, Karnataka – 560010',          hospitalPhone: '+91 80 6648 6648' },
+    { recommendedHospital: 'Centre for Sight Eye Hospital',          hospitalLocation: 'Safdarjung, New Delhi, Delhi – 110029',               hospitalPhone: '+91 11 4678 0000' },
+  ],
+  'General Medicine': [
+    { recommendedHospital: 'Max Super Speciality Hospital',          hospitalLocation: 'Saket, New Delhi, Delhi – 110017',                   hospitalPhone: '+91 11 2651 5050' },
+    { recommendedHospital: 'Apollo Hospitals',                       hospitalLocation: 'Greams Road, Chennai, Tamil Nadu – 600006',           hospitalPhone: '+91 44 2829 0200' },
+    { recommendedHospital: 'Manipal Hospital',                       hospitalLocation: 'Old Airport Road, Bengaluru, Karnataka – 560017',     hospitalPhone: '+91 80 2502 4444' },
+    { recommendedHospital: 'Fortis Memorial Research Institute',     hospitalLocation: 'Sector 44, Gurugram, Haryana – 122002',               hospitalPhone: '+91 124 496 2200' },
+    { recommendedHospital: 'Kokilaben Dhirubhai Ambani Hospital',    hospitalLocation: 'Andheri West, Mumbai, Maharashtra – 400053',          hospitalPhone: '+91 22 4269 6969' },
+    { recommendedHospital: 'KIMS Hospital',                          hospitalLocation: 'Minister Road, Secunderabad, Telangana – 500003',     hospitalPhone: '+91 40 4488 5000' },
+  ],
+};
+
+function pickRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 // COMPREHENSIVE SYMPTOM -> DEPARTMENT/HOSPITAL MAPPING
 function simulateTriageResult(currentSymptoms) {
   const s = currentSymptoms.toLowerCase();
+  let department;
+  let reasoning;
 
   // Cardiology
   if (s.includes('chest') || s.includes('heart') || s.includes('palpitation') ||
       s.includes('cardiac') || s.includes('angina') || s.includes('blood pressure') ||
-      s.includes('hypertension') || s.includes('breathless') || s.includes('pressure in chest') ||
+      s.includes('hypertension') || s.includes('breathless') ||
       s.includes('arm pain') || s.includes('jaw pain') || s.includes('dizzy') ||
       s.includes('fainting') || s.includes('arrhythmia') || s.includes('tachycardia')) {
-    return {
-      department: 'Cardiology',
-      reasoning: 'Cardiovascular symptoms detected. Patient requires immediate cardiac evaluation and specialist assessment.',
-      recommendedHospital: 'Fortis Escorts Heart Institute',
-      hospitalLocation: 'Okhla Road, New Delhi, Delhi – 110025',
-      hospitalPhone: '+91 11 4713 5000'
-    };
-  }
+    department = 'Cardiology';
+    reasoning  = 'Cardiovascular symptoms detected. Patient requires immediate cardiac evaluation and specialist assessment.';
 
   // Gynecology
-  if (s.includes('pregnan') || s.includes('period') || s.includes('menstrual') ||
+  } else if (s.includes('pregnan') || s.includes('period') || s.includes('menstrual') ||
       s.includes('gynecol') || s.includes('obstetric') || s.includes('uterus') ||
       s.includes('ovarian') || s.includes('vaginal') || s.includes('pcos') ||
       s.includes('fertility') || s.includes('discharge') || s.includes('breast pain') ||
       s.includes('missed period') || s.includes('cramps')) {
-    return {
-      department: 'Gynecology',
-      reasoning: 'Gynecological or maternity-related symptoms identified. Referred to specialist care.',
-      recommendedHospital: 'Apollo Cradle & Childrens Hospital',
-      hospitalLocation: 'Koramangala, Bengaluru, Karnataka – 560034',
-      hospitalPhone: '+91 80 4424 4424'
-    };
-  }
+    department = 'Gynecology';
+    reasoning  = 'Gynecological or maternity-related symptoms identified. Referred to specialist care.';
 
   // Pulmonology
-  if (s.includes('cough') || s.includes('breath') || s.includes('asthma') ||
+  } else if (s.includes('cough') || s.includes('breath') || s.includes('asthma') ||
       s.includes('lung') || s.includes('wheez') || s.includes('pneumonia') ||
       s.includes('tuberculosis') || s.includes('tb') || s.includes('sputum') ||
       s.includes('bronchitis') || s.includes('inhaler') || s.includes('oxygen') ||
       s.includes('shortness of breath') || s.includes('chest tightness')) {
-    return {
-      department: 'Pulmonology',
-      reasoning: 'Respiratory distress or chronic pulmonary symptoms detected. Referred to Pulmonology.',
-      recommendedHospital: 'Medanta - The Medicity',
-      hospitalLocation: 'Sector 38, Gurugram, Haryana – 122001',
-      hospitalPhone: '+91 124 414 1414'
-    };
-  }
+    department = 'Pulmonology';
+    reasoning  = 'Respiratory distress or chronic pulmonary symptoms detected. Referred to Pulmonology.';
 
   // Ophthalmology
-  if (s.includes('eye') || s.includes('vision') || s.includes('blur') ||
+  } else if (s.includes('eye') || s.includes('vision') || s.includes('blur') ||
       s.includes('blind') || s.includes('cataract') || s.includes('glaucoma') ||
       s.includes('retina') || s.includes('itchy eye') || s.includes('red eye') ||
       s.includes('watering eye') || s.includes('sight') || s.includes('double vision')) {
-    return {
-      department: 'Ophthalmology',
-      reasoning: 'Ocular discomfort or vision-related symptoms detected. Referred to Ophthalmology.',
-      recommendedHospital: 'Sankara Nethralaya Eye Hospital',
-      hospitalLocation: 'Nungambakkam, Chennai, Tamil Nadu – 600006',
-      hospitalPhone: '+91 44 2827 1616'
-    };
-  }
+    department = 'Ophthalmology';
+    reasoning  = 'Ocular discomfort or vision-related symptoms detected. Referred to Ophthalmology.';
 
   // General Medicine (default)
-  return {
-    department: 'General Medicine',
-    reasoning: 'General symptoms detected. Routed to General Medicine for baseline evaluation and treatment.',
-    recommendedHospital: 'Max Super Speciality Hospital',
-    hospitalLocation: 'Saket, New Delhi, Delhi – 110017',
-    hospitalPhone: '+91 11 2651 5050'
-  };
+  } else {
+    department = 'General Medicine';
+    reasoning  = 'General symptoms detected. Routed to General Medicine for baseline evaluation and treatment.';
+  }
+
+  // Randomly pick a hospital from the pool for this department
+  const hospital = pickRandom(hospitalPools[department]);
+  return { department, reasoning, ...hospital };
 }
 
 // LIVE LLM PIPELINE USING OPENAI (with graceful fallback)
@@ -259,6 +286,13 @@ app.post('/api/appointments', (req, res) => {
   if (!patientPhone || patientPhone.trim() === '') {
     return res.status(400).json({ error: 'Patient Mobile Number is mandatory for booking confirmation.' });
   }
+
+  const cleanPhone = patientPhone.trim().replace(/[\s\-()]/g, '');
+  const phoneRegex = /^(?:\+91|0)?[6-9]\d{9}$/;
+  if (!phoneRegex.test(cleanPhone)) {
+    return res.status(400).json({ error: 'Invalid Patient Mobile Number. Please enter a valid 10-digit number.' });
+  }
+
   if (!patientId || !doctorId || !slot) {
     return res.status(400).json({ error: 'Patient ID, Doctor ID, and slot are required.' });
   }

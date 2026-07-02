@@ -65,8 +65,17 @@ function App() {
     setPhoneError('');
     setBookingError('');
 
-    if (!patientPhone.trim()) {
+    const trimmedPhone = patientPhone.trim();
+    if (!trimmedPhone) {
       setPhoneError('Mobile number is required to send confirmation.');
+      return;
+    }
+
+    // Clean phone number by removing spaces, hyphens, and parentheses
+    const cleanPhone = trimmedPhone.replace(/[\s\-()]/g, '');
+    const phoneRegex = /^(?:\+91|0)?[6-9]\d{9}$/;
+    if (!phoneRegex.test(cleanPhone)) {
+      setPhoneError('Please enter a valid 10-digit mobile number (e.g. +91 98765 43210).');
       return;
     }
 
@@ -77,7 +86,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patientId,
-          patientPhone:     patientPhone.trim(),
+          patientPhone:     trimmedPhone,
           doctorId:         selectedSlot.doctorId,
           doctorName:       selectedSlot.doctorName,
           slot:             selectedSlot.slot,
@@ -395,7 +404,12 @@ function App() {
                   type="tel"
                   id="checkoutPhone"
                   value={patientPhone}
-                  onChange={(e) => { setPatientPhone(e.target.value); setPhoneError(''); }}
+                  onChange={(e) => {
+                    const cleaned = e.target.value.replace(/[^0-9+\s\-()]/g, '');
+                    setPatientPhone(cleaned);
+                    setPhoneError('');
+                  }}
+                  className={phoneError ? 'input-error' : ''}
                   placeholder="e.g. +91 98765 43210"
                   required
                 />

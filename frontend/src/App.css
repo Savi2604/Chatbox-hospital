@@ -876,3 +876,8 @@ body {
   }
 }
 
+.input-error {
+  border-color: var(--error-color) !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
+}
+
