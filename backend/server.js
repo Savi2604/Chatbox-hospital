@@ -506,8 +506,8 @@ app.post('/api/appointments', async (req, res) => {
       
       const message = await twilioClient.messages.create({
         body: smsMessage,
-        from: `whatsapp:${twilioPhoneNumber}`,
-        to: `whatsapp:${recipientPhone}`
+        from: twilioPhoneNumber,
+        to: recipientPhone
       });
       console.log(`[TWILIO] SMS successfully sent to ${recipientPhone}. Message SID: ${message.sid}`);
       twilioSmsSuccess = true;
