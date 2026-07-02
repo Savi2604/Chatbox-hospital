@@ -155,50 +155,102 @@ function App() {
         {/* ── CONFIRMED APPOINTMENT SCREEN ── */}
         {confirmedAppointment && (
           <section className="confirmed-section">
+            {/* Confetti particles */}
+            <div className="confetti-container">
+              {[...Array(20)].map((_, i) => (
+                <div key={i} className="confetti-piece" style={{
+                  left: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 2}s`,
+                  animationDuration: `${2 + Math.random() * 3}s`,
+                  backgroundColor: ['#0d9488', '#059669', '#0891b2', '#6366f1', '#f59e0b', '#ec4899'][i % 6],
+                  width: `${6 + Math.random() * 6}px`,
+                  height: `${6 + Math.random() * 6}px`,
+                }} />
+              ))}
+            </div>
+
             <div className="confirmed-card">
-              <div className="confirmed-icon">✓</div>
-              <h2>Appointment Confirmed!</h2>
+              {/* Animated checkmark */}
+              <div className="confirmed-icon-ring">
+                <div className="confirmed-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" className="check-draw" />
+                  </svg>
+                </div>
+              </div>
+
+              <h2 className="confirmed-title">Appointment Confirmed!</h2>
               <p className="confirmed-sub">
-                Your appointment has been successfully booked. Details are listed below.
+                Your appointment has been successfully booked. A confirmation SMS has been sent to your mobile.
               </p>
 
+              {/* Booking details with staggered animations */}
               <div className="confirmed-details">
-                <div className="confirmed-row">
-                  <span>Doctor</span>
-                  <strong>{confirmedAppointment.doctorName}</strong>
+                <div className="confirmed-row fade-row" style={{ animationDelay: '0.1s' }}>
+                  <span className="row-icon">👨‍⚕️</span>
+                  <div className="row-content">
+                    <span className="row-label">Doctor</span>
+                    <strong>{confirmedAppointment.doctorName}</strong>
+                  </div>
                 </div>
-                <div className="confirmed-row">
-                  <span>Specialty</span>
-                  <strong>{confirmedAppointment.specialty}</strong>
+                <div className="confirmed-row fade-row" style={{ animationDelay: '0.2s' }}>
+                  <span className="row-icon">🏥</span>
+                  <div className="row-content">
+                    <span className="row-label">Hospital</span>
+                    <strong>{confirmedAppointment.hospitalName}</strong>
+                  </div>
                 </div>
-                <div className="confirmed-row">
-                  <span>Time Slot</span>
-                  <strong>{confirmedAppointment.slot}</strong>
+                <div className="confirmed-row fade-row" style={{ animationDelay: '0.3s' }}>
+                  <span className="row-icon">📍</span>
+                  <div className="row-content">
+                    <span className="row-label">Location</span>
+                    <strong>{confirmedAppointment.hospitalLocation}</strong>
+                  </div>
                 </div>
-                <div className="confirmed-row">
-                  <span>Hospital</span>
-                  <strong>{confirmedAppointment.hospitalName}</strong>
+                <div className="confirmed-row fade-row" style={{ animationDelay: '0.4s' }}>
+                  <span className="row-icon">🕐</span>
+                  <div className="row-content">
+                    <span className="row-label">Time Slot</span>
+                    <strong className="slot-highlight">{confirmedAppointment.slot}</strong>
+                  </div>
                 </div>
-                <div className="confirmed-row">
-                  <span>Location</span>
-                  <strong>{confirmedAppointment.hospitalLocation}</strong>
-                </div>
-                <div className="confirmed-row">
-                  <span>Helpdesk</span>
-                  <strong>{confirmedAppointment.hospitalPhone}</strong>
-                </div>
-                <div className="confirmed-row">
-                  <span>SMS Sent To</span>
-                  <strong>{confirmedAppointment.patientPhone}</strong>
+                <div className="confirmed-row fade-row" style={{ animationDelay: '0.5s' }}>
+                  <span className="row-icon">📞</span>
+                  <div className="row-content">
+                    <span className="row-label">Helpdesk</span>
+                    <strong>{confirmedAppointment.hospitalPhone}</strong>
+                  </div>
                 </div>
               </div>
 
-              <div className="confirmed-sms-badge">
-                📱 Confirmation SMS dispatched to {confirmedAppointment.patientPhone}
+              {/* Simulated Phone SMS Preview */}
+              <div className="phone-sms-preview fade-row" style={{ animationDelay: '0.7s' }}>
+                <div className="phone-frame">
+                  <div className="phone-notch"></div>
+                  <div className="phone-screen">
+                    <div className="sms-header">
+                      <div className="sms-avatar">🏥</div>
+                      <div>
+                        <div className="sms-sender">{confirmedAppointment.hospitalName}</div>
+                        <div className="sms-time">Just now</div>
+                      </div>
+                    </div>
+                    <div className="sms-bubble">
+                      <p>Hi <strong>{patientId}</strong>,</p>
+                      <p>Your appointment with <strong>{confirmedAppointment.doctorName}</strong> ({confirmedAppointment.specialty}) at <strong>{confirmedAppointment.hospitalName}</strong> ({confirmedAppointment.hospitalLocation}) for slot <strong>{confirmedAppointment.slot}</strong> is confirmed!</p>
+                      <p>Helpdesk: {confirmedAppointment.hospitalPhone}</p>
+                      <div className="sms-footer">
+                        <span className="sms-delivered">✓✓ Delivered</span>
+                        <span className="sms-timestamp">{new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p className="sms-caption">📱 SMS sent to <strong>{confirmedAppointment.patientPhone}</strong></p>
               </div>
 
-              <button onClick={resetAll} className="btn-primary" style={{ marginTop: '1.5rem', width: '100%' }}>
-                Book Another Appointment
+              <button onClick={resetAll} className="btn-book-another fade-row" style={{ animationDelay: '0.9s' }}>
+                ✨ Book Another Appointment
               </button>
             </div>
           </section>
