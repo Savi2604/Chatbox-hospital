@@ -506,7 +506,8 @@ app.post('/api/triage', async (req, res) => {
         hospitalLocation:         recommendation.hospitalLocation,
         hospitalPhone:            recommendation.hospitalPhone,
         doctors,
-        }
+        queueInfo,
+        caseSheet
       }
     });
   } catch (err) {
