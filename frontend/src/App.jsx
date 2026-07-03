@@ -339,7 +339,22 @@ function App() {
           
           const utterance = new SpeechSynthesisUtterance(announcement);
           utterance.lang = utteranceLang;
-          utterance.rate = 0.9; // Slower pacing for clarity
+          utterance.rate = 0.85; // Slower pacing for clarity
+          
+          // Force load voices and strictly assign the correct regional voice
+          const voices = window.speechSynthesis.getVoices();
+          let targetVoice = null;
+          if (appLang === 'hi-IN') {
+            targetVoice = voices.find(v => v.lang.includes('hi') || v.name.toLowerCase().includes('hindi'));
+          } else if (appLang === 'ta-IN') {
+            targetVoice = voices.find(v => v.lang.includes('ta') || v.name.toLowerCase().includes('tamil'));
+          } else {
+            targetVoice = voices.find(v => v.lang.includes('en-IN') || v.lang.includes('en'));
+          }
+          if (targetVoice) {
+            utterance.voice = targetVoice;
+          }
+          
           window.speechSynthesis.speak(utterance);
         }
 
@@ -954,6 +969,21 @@ function App() {
                 />
                 {phoneError && <small className="field-error">{phoneError}</small>}
                 <small className="hint">Enter your 10-digit Indian mobile number. An SMS will be sent on confirmation.</small>
+              </div>
+
+              <div className="form-group" style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem' }}>
+                <label>Voice Announcement Language</label>
+                <select 
+                  className="lang-selector"
+                  value={appLang} 
+                  onChange={(e) => setAppLang(e.target.value)}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #475569', background: '#0f172a', color: '#e2e8f0', fontSize: '0.9rem' }}
+                >
+                  <option value="en-IN">🗣️ Play Audio in English</option>
+                  <option value="hi-IN">🗣️ Play Audio in Hindi (हिंदी)</option>
+                  <option value="ta-IN">🗣️ Play Audio in Tamil (தமிழ்)</option>
+                </select>
+                <small className="hint">The confirmation will be spoken aloud in this language.</small>
               </div>
 
               {bookingError && (
