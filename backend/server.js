@@ -599,8 +599,8 @@ app.post('/api/appointments', async (req, res) => {
 
   res.json({
     success: true,
-    message: fast2smsApiKey && !smsSent
-      ? `Appointment confirmed with ${resolvedDoctorName} at ${slot}. However, the SMS delivery failed: ${smsError}`
+    message: twilioClient && !twilioSmsSuccess
+      ? `Appointment confirmed with ${resolvedDoctorName} at ${slot}. However, the SMS delivery failed: ${twilioSmsError}`
       : `Appointment confirmed with ${resolvedDoctorName} at ${slot}. A confirmation SMS has been sent to ${patientPhone}.`,
     appointment
   });
