@@ -895,7 +895,7 @@ function App() {
       {/* ── CHECKOUT MODAL ── */}
       {selectedSlot && (
         <div className="checkout-overlay">
-          <div className="checkout-modal">
+          <div className="checkout-modal" style={{ maxHeight: '95vh', overflowY: 'auto' }}>
             <button className="close-btn" onClick={() => setSelectedSlot(null)} aria-label="Close">&times;</button>
 
             <div className="checkout-header">
