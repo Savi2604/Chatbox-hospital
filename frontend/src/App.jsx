@@ -317,6 +317,18 @@ function App() {
       }
 
       if (data.success) {
+        // ── Elderly Accessibility Voice Output (TTS) ──
+        if ('speechSynthesis' in window) {
+          const tokenStr = triageResult?.queueInfo?.tokenNumber ?? '0';
+          const deptStr = selectedSlot.specialty;
+          const waitStr = triageResult?.queueInfo?.estimatedWaitMins ?? '0';
+          const announcement = `Dear Patient, your appointment is confirmed. Your priority token number is ${tokenStr} for the Department of ${deptStr}. Your estimated wait time is ${waitStr} minutes.`;
+          
+          const utterance = new SpeechSynthesisUtterance(announcement);
+          utterance.rate = 0.9; // Slower pacing for clarity
+          window.speechSynthesis.speak(utterance);
+        }
+
         // Show in-app confirmation screen instead of alert()
         setConfirmedAppointment({
           doctorName:       selectedSlot.doctorName,
