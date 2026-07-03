@@ -181,7 +181,8 @@ function App() {
   // Confirmation screen state — replaces alert()
   const [confirmedAppointment, setConfirmedAppointment] = useState(null);
 
-  // ── Ambient AI Scribe (Voice) ──────────────────────────────────────────────
+  // ── Ambient AI Scribe (Voice) & Language ───────────────────────────────────
+  const [appLang, setAppLang] = useState('en-IN');
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
 
@@ -196,7 +197,7 @@ function App() {
       return;
     }
     const recognition = new SpeechRecognition();
-    recognition.lang = 'en-IN';
+    recognition.lang = appLang;
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
@@ -322,9 +323,22 @@ function App() {
           const tokenStr = triageResult?.queueInfo?.tokenNumber ?? '0';
           const deptStr = selectedSlot.specialty;
           const waitStr = triageResult?.queueInfo?.estimatedWaitMins ?? '0';
-          const announcement = `Dear Patient, your appointment is confirmed. Your priority token number is ${tokenStr} for the Department of ${deptStr}. Your estimated wait time is ${waitStr} minutes.`;
+          
+          let announcement = '';
+          let utteranceLang = 'en-IN';
+          
+          if (appLang === 'hi-IN') {
+            announcement = `प्रिय रोगी, आपकी नियुक्ति की पुष्टि हो गई है। ${deptStr} विभाग के लिए आपका प्राथमिकता टोकन नंबर ${tokenStr} है। आपका अनुमानित प्रतीक्षा समय ${waitStr} मिनट है।`;
+            utteranceLang = 'hi-IN';
+          } else if (appLang === 'ta-IN') {
+            announcement = `அன்பான நோயாளியே, உங்கள் சந்திப்பு உறுதி செய்யப்பட்டுள்ளது. ${deptStr} பிரிவிற்கான உங்கள் முன்னுரிமை டோக்கன் எண் ${tokenStr}. உங்கள் உத்தேச காத்திருப்பு நேரம் ${waitStr} நிமிடங்கள்.`;
+            utteranceLang = 'ta-IN';
+          } else {
+            announcement = `Dear Patient, your appointment is confirmed. Your priority token number is ${tokenStr} for the Department of ${deptStr}. Your estimated wait time is ${waitStr} minutes.`;
+          }
           
           const utterance = new SpeechSynthesisUtterance(announcement);
+          utterance.lang = utteranceLang;
           utterance.rate = 0.9; // Slower pacing for clarity
           window.speechSynthesis.speak(utterance);
         }
@@ -566,7 +580,20 @@ function App() {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="symptoms">Current Symptoms</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '0.4rem' }}>
+                    <label htmlFor="symptoms" style={{ margin: 0 }}>Current Symptoms</label>
+                    <select 
+                      className="lang-selector"
+                      value={appLang} 
+                      onChange={(e) => setAppLang(e.target.value)}
+                      title="Select Voice Language"
+                      style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #475569', background: '#0f172a', color: '#e2e8f0', fontSize: '0.8rem' }}
+                    >
+                      <option value="en-IN">🗣️ English</option>
+                      <option value="hi-IN">🗣️ Hindi (हिंदी)</option>
+                      <option value="ta-IN">🗣️ Tamil (தமிழ்)</option>
+                    </select>
+                  </div>
                   <div className="symptoms-input-wrapper">
                     <textarea
                       id="symptoms"
