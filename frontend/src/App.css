@@ -1835,3 +1835,307 @@ body {
     gap: 0.75rem;
   }
 }
+
+/* ===================================================
+   AMBIENT AI SCRIBE + IoT VITALS — NEW FEATURE STYLES
+   =================================================== */
+
+/* -- Symptoms wrapper with mic button -- */
+.symptoms-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+.symptoms-input-wrapper textarea {
+  flex: 1;
+  border-radius: 12px 0 0 12px !important;
+}
+
+/* -- Microphone Button -- */
+.mic-btn {
+  flex-shrink: 0;
+  width: 52px;
+  min-height: 110px;
+  background: linear-gradient(160deg, #0d4a4a 0%, #0a3a5c 100%);
+  border: 1px solid rgba(13, 148, 136, 0.4);
+  border-left: none;
+  border-radius: 0 12px 12px 0;
+  color: #94d9d5;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s ease;
+}
+.mic-btn:hover {
+  background: linear-gradient(160deg, #0d9488 0%, #0891b2 100%);
+  color: #fff;
+  transform: none;
+  box-shadow: 0 0 18px rgba(13,148,136,0.55);
+}
+.mic-btn--active {
+  background: linear-gradient(160deg, #991b1b 0%, #b91c1c 100%) !important;
+  border-color: #ef4444 !important;
+  color: #fff !important;
+  animation: mic-pulse 1.2s ease-in-out infinite;
+  box-shadow: 0 0 22px rgba(239,68,68,0.6);
+}
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(239,68,68,0.4); }
+  50%       { box-shadow: 0 0 28px rgba(239,68,68,0.85); }
+}
+
+/* -- Voice Recording Indicator -- */
+.voice-recording-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.9rem;
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #f87171;
+  font-weight: 500;
+}
+.voice-dot {
+  width: 7px;
+  height: 7px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: voice-bounce 0.8s ease-in-out infinite;
+}
+.voice-dot:nth-child(2) { animation-delay: 0.15s; }
+.voice-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes voice-bounce {
+  0%, 100% { transform: scaleY(1); }
+  50%       { transform: scaleY(2.2); }
+}
+
+/* -- Voice Transcribed Badge -- */
+.voice-transcribed-badge {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  background: rgba(13,148,136,0.15);
+  border: 1px solid rgba(13,148,136,0.4);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: #2dd4bf;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* -- IoT Vitals Panel -- */
+.vitals-panel {
+  margin-top: 1.2rem;
+  border-radius: 14px;
+  border: 1px solid rgba(13,148,136,0.25);
+  background: rgba(7,25,40,0.55);
+  overflow: hidden;
+}
+.vitals-toggle-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.9rem 1.25rem;
+  background: transparent;
+  border: none;
+  color: #94d9d5;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s;
+}
+.vitals-toggle-btn:hover { background: rgba(13,148,136,0.12); }
+.vitals-toggle-icon { font-size: 0.7rem; color: #0d9488; transition: transform 0.2s; }
+.vitals-active-badge {
+  margin-left: auto;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0.18rem 0.6rem;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #0d9488, #0891b2);
+  color: #fff;
+}
+.vitals-inputs {
+  padding: 1rem 1.25rem 1.25rem;
+  border-top: 1px solid rgba(13,148,136,0.2);
+}
+.vitals-desc {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-bottom: 1rem;
+}
+.vitals-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.vitals-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.vitals-field label {
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+.vitals-input {
+  padding: 0.6rem 0.85rem;
+  background: rgba(15,30,50,0.6);
+  border: 1px solid rgba(100,116,139,0.35);
+  border-radius: 10px;
+  color: #e2e8f0;
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+}
+.vitals-input:focus { outline: none; border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,0.2); }
+.vitals-input--danger {
+  border-color: #ef4444 !important;
+  background: rgba(127,29,29,0.25) !important;
+  box-shadow: 0 0 0 3px rgba(239,68,68,0.2) !important;
+  animation: danger-pulse 1.5s ease-in-out infinite;
+}
+@keyframes danger-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(239,68,68,0.2); }
+  50%       { box-shadow: 0 0 0 5px rgba(239,68,68,0.45); }
+}
+.vitals-warn {
+  font-size: 0.74rem;
+  color: #f87171;
+  font-weight: 700;
+  animation: fadeInUp 0.3s ease;
+}
+
+/* -- Vitals Critical Override Banner -- */
+.vitals-critical-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.25rem;
+  background: linear-gradient(135deg, rgba(127,29,29,0.7) 0%, rgba(153,27,27,0.7) 100%);
+  border: 1px solid #ef4444;
+  border-radius: 14px;
+  animation: vcb-slide-in 0.4s ease, vcb-glow 2s ease-in-out infinite;
+  position: relative;
+  overflow: hidden;
+}
+.vitals-critical-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 8px,
+    rgba(239,68,68,0.08) 8px,
+    rgba(239,68,68,0.08) 16px
+  );
+}
+@keyframes vcb-slide-in {
+  from { transform: translateY(-20px); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+@keyframes vcb-glow {
+  0%, 100% { box-shadow: 0 0 12px rgba(239,68,68,0.45); }
+  50%       { box-shadow: 0 0 28px rgba(239,68,68,0.85); }
+}
+.vcb-pulse {
+  width: 14px;
+  height: 14px;
+  background: #ef4444;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: vcb-dot-pulse 0.9s ease-in-out infinite;
+}
+@keyframes vcb-dot-pulse {
+  0%, 100% { transform: scale(1);   opacity: 1;   }
+  50%       { transform: scale(1.5); opacity: 0.6; }
+}
+.vcb-icon { font-size: 1.6rem; flex-shrink: 0; }
+.vcb-text { flex: 1; display: flex; flex-direction: column; gap: 0.2rem; }
+.vcb-text strong { color: #fca5a5; font-size: 0.95rem; font-weight: 800; }
+.vcb-text span   { color: #fecaca; font-size: 0.8rem; }
+.vcb-badge {
+  padding: 0.3rem 0.8rem;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  border-radius: 20px;
+  flex-shrink: 0;
+  animation: vcb-badge-pulse 1s ease-in-out infinite;
+}
+@keyframes vcb-badge-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+/* -- Clinical Case Sheet Panel -- */
+.case-sheet-panel {
+  margin-top: 1.25rem;
+  border-radius: 14px;
+  border: 1px solid rgba(99,102,241,0.35);
+  background: rgba(30,27,75,0.45);
+  overflow: hidden;
+}
+.case-sheet-header {
+  padding: 0.75rem 1.25rem;
+  background: linear-gradient(135deg, rgba(99,102,241,0.25), rgba(139,92,246,0.2));
+  border-bottom: 1px solid rgba(99,102,241,0.3);
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #a5b4fc;
+  letter-spacing: 0.04em;
+}
+.case-sheet-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid rgba(99,102,241,0.15);
+}
+.case-sheet-row:last-child { border-bottom: none; }
+.cs-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #818cf8;
+}
+.cs-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.cs-tag {
+  padding: 0.25rem 0.7rem;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.cs-tag--symptom  { background: rgba(239,68,68,0.15);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.3);  }
+.cs-tag--duration { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
+.cs-snapshot {
+  font-size: 0.85rem;
+  color: #c7d2fe;
+  line-height: 1.6;
+  margin: 0;
+  font-style: italic;
+}
+
+/* -- Responsive for vitals row -- */
+@media (max-width: 480px) {
+  .vitals-row { grid-template-columns: 1fr; }
+  .symptoms-input-wrapper { flex-direction: column; }
+  .symptoms-input-wrapper textarea { border-radius: 12px !important; }
+  .mic-btn { width: 100%; min-height: 44px; border-radius: 12px !important; border-left: 1px solid rgba(13,148,136,0.4) !important; }
+  .vitals-critical-banner { flex-wrap: wrap; }
+}

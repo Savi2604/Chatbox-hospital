@@ -348,14 +348,22 @@ function simulateTriageResult(currentSymptoms) {
 }
 
 // LIVE LLM PIPELINE USING OPENAI (with graceful fallback)
-async function getAIRecommendation(history, currentSymptoms) {
+async function getAIRecommendation(history, currentSymptoms, isVoiceInput = false) {
   if (apiKey === 'mock-api-key') {
     console.log('[OPENAI] No API key configured — using simulated triage.');
     return simulateTriageResult(currentSymptoms);
   }
 
   try {
-    const systemInstruction = `You are a medical triage AI assistant. Analyze patient symptoms and medical history to recommend the appropriate medical department and assess the severity of the patient's condition.
+    const scribeAddendum = isVoiceInput ? `
+
+AMBIENT SCRIBE MODE ACTIVE: This input originated from a voice transcript captured by the Ambient AI Scribe. In addition to the base JSON fields, you MUST also include a "caseSheet" object with exactly these keys:
+- "symptoms_detected": array of distinct clinical symptom strings extracted from the transcript (e.g., ["chest pain", "shortness of breath"]).
+- "duration_inferred": array of any duration or timeline references found in the text (e.g., ["since morning", "for 3 days"]). Empty array if none found.
+- "clinical_snapshot": a concise 1-2 sentence clinical summary of the patient's condition as a professional clinician would write it.
+If no voice transcript context is inferrable, return empty arrays and a generic snapshot.` : '';
+
+    const systemInstruction = `You are a medical triage AI assistant and Ambient Clinical Scribe. Analyze patient symptoms and medical history to recommend the appropriate medical department and assess the severity of the patient's condition.
 Available departments: Cardiology, Gynecology, Pulmonology, Ophthalmology, General Medicine.
 
 Severity Level Definitions (STRICT — use only these three):
@@ -370,8 +378,9 @@ Output ONLY a raw JSON object — no markdown, no extra text — matching this s
   "severity": "High | Medium | Low",
   "recommendedHospital": "Realistic premium hospital name in India.",
   "hospitalLocation": "Realistic specific metro city branch/address in India.",
-  "hospitalPhone": "Realistic Indian hospital helpline number in format +91 XX XXXX XXXX"
-}`;
+  "hospitalPhone": "Realistic Indian hospital helpline number in format +91 XX XXXX XXXX"${isVoiceInput ? `,
+  "caseSheet": { "symptoms_detected": [], "duration_inferred": [], "clinical_snapshot": "" }` : ''}
+}${scribeAddendum}`;
 
     const prompt = `Patient Medical History: ${history.length > 0 ? history.join(', ') : 'None recorded'}
 Current Symptoms: ${currentSymptoms}
@@ -406,7 +415,6 @@ Provide the triage recommendation as a raw JSON object.`;
 
     if (!parsed.department || !validDepts.includes(parsed.department))    parsed.department = 'General Medicine';
     if (!parsed.severity   || !validSeverities.includes(parsed.severity)) {
-      // Fallback: derive severity from symptoms locally if AI omits it
       parsed.severity = determineSeverityFromSymptoms(currentSymptoms);
     }
     if (!parsed.reasoning)           throw new Error('Missing reasoning field');
@@ -421,13 +429,58 @@ Provide the triage recommendation as a raw JSON object.`;
   }
 }
 
+// ── LOCAL AMBIENT SCRIBE PARSER (fallback when AI is in mock mode) ─────────────
+// Extracts structured clinical metadata from a voice transcript without an LLM.
+function buildLocalCaseSheet(transcript) {
+  const s = transcript.toLowerCase();
+  // Extract symptom tokens
+  const knownSymptoms = [
+    'chest pain','shortness of breath','fever','headache','nausea','vomiting',
+    'dizziness','back pain','joint pain','fatigue','cough','sore throat',
+    'abdominal pain','rash','palpitations','blurred vision','swelling',
+    'breathlessness','weakness','loss of appetite','insomnia','anxiety'
+  ];
+  const symptoms_detected = knownSymptoms.filter(kw => s.includes(kw));
+
+  // Extract duration hints
+  const durationPatterns = [
+    /since (\w+(?: \w+)?)/gi,
+    /for (\d+ (?:day|hour|week|month)s?)/gi,
+    /(\d+ (?:day|hour|week|month)s?) ago/gi,
+    /(yesterday|this morning|last night|past few days|few hours)/gi
+  ];
+  const duration_inferred = [];
+  for (const rx of durationPatterns) {
+    const m = transcript.match(rx);
+    if (m) duration_inferred.push(...m.map(x => x.trim()));
+  }
+
+  const clinical_snapshot = symptoms_detected.length > 0
+    ? `Patient presents with ${symptoms_detected.join(', ')}${duration_inferred.length > 0 ? ', reported ' + duration_inferred[0] : ''}. Requires clinical evaluation.`
+    : 'Voice transcript received. Clinical symptoms require manual review by attending physician.';
+
+  return { symptoms_detected, duration_inferred, clinical_snapshot };
+}
+
 // ─── API ENDPOINTS ────────────────────────────────────────────────────────────
 
 // POST /api/triage
 app.post('/api/triage', async (req, res) => {
-  const { patientId, currentSymptoms } = req.body;
+  const { patientId, currentSymptoms, isVoiceInput, pulseRate, spo2 } = req.body;
   if (!patientId || !currentSymptoms) {
     return res.status(400).json({ error: 'Patient ID and symptoms are required.' });
+  }
+
+  // ── IoT Vitals Override Check ─────────────────────────────────────────────
+  const pulseNum = pulseRate !== null && pulseRate !== undefined ? Number(pulseRate) : null;
+  const spo2Num  = spo2      !== null && spo2      !== undefined ? Number(spo2)      : null;
+  const vitalsCriticalOverride = (
+    (pulseNum !== null && !isNaN(pulseNum) && pulseNum > 120) ||
+    (spo2Num  !== null && !isNaN(spo2Num)  && spo2Num  < 90)
+  );
+
+  if (vitalsCriticalOverride) {
+    console.log(`[VITALS ENGINE] 🚨 CRITICAL OVERRIDE — Pulse: ${pulseNum} BPM, SpO2: ${spo2Num}%. Severity forced to HIGH for ${patientId}.`);
   }
 
   try {
@@ -437,7 +490,7 @@ app.post('/api/triage', async (req, res) => {
       patientsDB[patientId] = patient;
     }
 
-    const recommendation = await getAIRecommendation(patient.history, currentSymptoms);
+    const recommendation = await getAIRecommendation(patient.history, currentSymptoms, isVoiceInput === true);
     const doctors = spawnDynamicDoctors(
       recommendation.department,
       recommendation.recommendedHospital,
@@ -445,9 +498,24 @@ app.post('/api/triage', async (req, res) => {
       recommendation.hospitalPhone
     );
 
-    // ── Process Dynamic Queue Triage ──────────────────────────────────────
-    const severity = recommendation.severity || 'Low';
+    // ── Apply vitals hard-override AFTER AI recommendation ───────────────────────
+    let severity = recommendation.severity || 'Low';
+    if (vitalsCriticalOverride) severity = 'High';
+
+    // ── Build local case sheet if voice mode and AI didn’t return one ────────────
+    let caseSheet = null;
+    if (isVoiceInput === true) {
+      caseSheet = recommendation.caseSheet || buildLocalCaseSheet(currentSymptoms);
+      console.log('[AMBIENT SCRIBE] Clinical case sheet generated:', JSON.stringify(caseSheet));
+    }
+
+    // ── Process Dynamic Queue Triage ───────────────────────────────────────
     const queueInfo = processQueueEntry(recommendation.department, patientId, severity);
+
+    // Build vitals overlay string for reasoning if override was triggered
+    const vitalsNote = vitalsCriticalOverride
+      ? ` [IoT VITALS OVERRIDE: Pulse=${pulseNum ?? 'N/A'} BPM, SpO2=${spo2Num ?? 'N/A'}% — Critical values detected. Priority forced.]`
+      : '';
 
     res.json({
       patient,

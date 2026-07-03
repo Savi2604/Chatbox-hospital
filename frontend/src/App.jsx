@@ -181,6 +181,52 @@ function App() {
   // Confirmation screen state — replaces alert()
   const [confirmedAppointment, setConfirmedAppointment] = useState(null);
 
+  // ── Ambient AI Scribe (Voice) ──────────────────────────────────────────────
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef(null);
+
+  const startVoiceInput = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Your browser does not support voice input. Please use Chrome or Edge.');
+      return;
+    }
+    if (isRecording) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-IN';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognitionRef.current = recognition;
+
+    recognition.onstart = () => setIsRecording(true);
+    recognition.onend   = () => setIsRecording(false);
+    recognition.onerror = () => setIsRecording(false);
+    recognition.onresult = (e) => {
+      let transcript = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        transcript += e.results[i][0].transcript;
+      }
+      setSymptoms(prev => {
+        const base = prev.trim();
+        return base ? base + ' ' + transcript : transcript;
+      });
+      setIsVoiceInput(true);
+    };
+    recognition.start();
+  };
+
+  const [isVoiceInput, setIsVoiceInput] = useState(false);
+
+  // ── IoT Vitals Panel ──────────────────────────────────────────────────────
+  const [vitalsOpen, setVitalsOpen]   = useState(false);
+  const [pulseRate,  setPulseRate]    = useState('');
+  const [spo2,       setSpo2]         = useState('');
+  const [vitalsCritical, setVitalsCritical] = useState(false);
+
   // ── Triage ──────────────────────────────────────────────────────────────────
   const handleTriage = async (e) => {
     e.preventDefault();
@@ -193,7 +239,13 @@ function App() {
       const response = await fetch(`${API_URL}/api/triage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patientId, currentSymptoms: symptoms }),
+        body: JSON.stringify({
+          patientId,
+          currentSymptoms: symptoms,
+          isVoiceInput,
+          pulseRate:  pulseRate  !== '' ? Number(pulseRate)  : null,
+          spo2:       spo2       !== '' ? Number(spo2)       : null,
+        }),
       });
 
       if (!response.ok) {
@@ -206,6 +258,7 @@ function App() {
 
       setPatientData(data.patient);
       setTriageResult(data.triageResult);
+      setVitalsCritical(data.triageResult.vitalsCriticalOverride === true);
 
       // Pre-fill mobile from DB if available
       if (data.patient.mobile && data.patient.mobile !== '+91-XXXXXXXXXX') {
@@ -232,13 +285,13 @@ function App() {
       return;
     }
 
-    // Clean phone number by removing spaces, hyphens, and parentheses
-    const cleanPhone = trimmedPhone.replace(/[\s\-()]/g, '');
-    const phoneRegex = /^(?:\+91|0)?[6-9]\d{9}$/;
-    if (!phoneRegex.test(cleanPhone)) {
-      setPhoneError('Please enter a valid 10-digit mobile number (e.g. +91 98765 43210).');
+    // Strictly validate: exactly 10 digits, starting with 6-9
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!phoneRegex.test(trimmedPhone)) {
+      setPhoneError('Please enter a valid 10-digit Indian mobile number (e.g. 9876543210).');
       return;
     }
+    const cleanPhone = trimmedPhone;
 
     setBookingLoading(true);
     try {
@@ -303,6 +356,10 @@ function App() {
     setBookingError('');
     setBookingLoading(false);
     setConfirmedAppointment(null);
+    setIsVoiceInput(false);
+    setVitalsCritical(false);
+    setPulseRate('');
+    setSpo2('');
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -468,6 +525,19 @@ function App() {
         {/* ── TRIAGE FORM (hide after confirmed) ── */}
         {!confirmedAppointment && (
           <>
+            {/* ── VITALS CRITICAL OVERRIDE BANNER ── */}
+            {vitalsCritical && (
+              <div className="vitals-critical-banner" role="alert" aria-live="assertive">
+                <span className="vcb-pulse" />
+                <span className="vcb-icon">🚨</span>
+                <div className="vcb-text">
+                  <strong>CRITICAL ESCALATION: Vital signs indicate clinical distress.</strong>
+                  <span>Priority allocation forced by IoT Vitals Override Engine.</span>
+                </div>
+                <span className="vcb-badge">FORCED PRIORITY</span>
+              </div>
+            )}
+
             <section className="input-section">
               <form onSubmit={handleTriage} className="triage-form">
                 <div className="form-group">
@@ -485,15 +555,102 @@ function App() {
 
                 <div className="form-group">
                   <label htmlFor="symptoms">Current Symptoms</label>
-                  <textarea
-                    id="symptoms"
-                    value={symptoms}
-                    onChange={(e) => setSymptoms(e.target.value)}
-                    placeholder="Describe the patient's current symptoms (e.g., severe chest pain, shortness of breath, blurred vision...)"
-                    rows="4"
-                    required
-                  />
-                  <small className="hint">💡 Tip: Mention severity (e.g., "severe", "mild") to trigger priority routing.</small>
+                  <div className="symptoms-input-wrapper">
+                    <textarea
+                      id="symptoms"
+                      value={symptoms}
+                      onChange={(e) => { setSymptoms(e.target.value); setIsVoiceInput(false); }}
+                      placeholder="Describe the patient's current symptoms (e.g., severe chest pain, shortness of breath, blurred vision...)"
+                      rows="4"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={startVoiceInput}
+                      className={`mic-btn ${isRecording ? 'mic-btn--active' : ''}`}
+                      title={isRecording ? 'Stop Recording' : 'Start Voice Input (Ambient Scribe)'}
+                      aria-label={isRecording ? 'Stop voice recording' : 'Start voice recording'}
+                    >
+                      {isRecording ? (
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                          <rect x="6" y="6" width="12" height="12" rx="2" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+                          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                          <line x1="12" y1="19" x2="12" y2="23"/>
+                          <line x1="8" y1="23" x2="16" y2="23"/>
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                  {isRecording && (
+                    <div className="voice-recording-indicator">
+                      <span className="voice-dot" /><span className="voice-dot" /><span className="voice-dot" />
+                      <span>Ambient Scribe active — speak your symptoms…</span>
+                    </div>
+                  )}
+                  {isVoiceInput && !isRecording && (
+                    <div className="voice-transcribed-badge">🎙️ Voice transcript captured — AI Scribe mode active</div>
+                  )}
+                  <small className="hint">💡 Tip: Use the 🎙️ mic to speak symptoms. Type or voice — both trigger priority routing.</small>
+                </div>
+
+                {/* ── IoT Vitals Panel ── */}
+                <div className="vitals-panel">
+                  <button
+                    type="button"
+                    className="vitals-toggle-btn"
+                    onClick={() => setVitalsOpen(v => !v)}
+                    aria-expanded={vitalsOpen}
+                  >
+                    <span className="vitals-toggle-icon">{vitalsOpen ? '▼' : '▶'}</span>
+                    <span>💓 Simulate Patient Vitals (IoT Input Integration)</span>
+                    {(pulseRate || spo2) && <span className="vitals-active-badge">VITALS ACTIVE</span>}
+                  </button>
+
+                  {vitalsOpen && (
+                    <div className="vitals-inputs">
+                      <p className="vitals-desc">Optionally simulate real-time patient vitals from an IoT device. Dangerously abnormal values will auto-escalate triage severity to CRITICAL.</p>
+                      <div className="vitals-row">
+                        <div className="vitals-field">
+                          <label htmlFor="pulseRate">❤️ Pulse Rate (BPM)</label>
+                          <input
+                            type="number"
+                            id="pulseRate"
+                            value={pulseRate}
+                            onChange={e => setPulseRate(e.target.value)}
+                            placeholder="e.g. 72"
+                            min="30"
+                            max="250"
+                            className={pulseRate !== '' && Number(pulseRate) > 120 ? 'vitals-input vitals-input--danger' : 'vitals-input'}
+                          />
+                          {pulseRate !== '' && Number(pulseRate) > 120 && (
+                            <span className="vitals-warn">⚠️ Tachycardia! (&gt;120 BPM)</span>
+                          )}
+                          <small className="hint">Normal: 60–100 BPM. Danger: &gt;120 BPM</small>
+                        </div>
+                        <div className="vitals-field">
+                          <label htmlFor="spo2">🫁 Oxygen Level (SpO2 %)</label>
+                          <input
+                            type="number"
+                            id="spo2"
+                            value={spo2}
+                            onChange={e => setSpo2(e.target.value)}
+                            placeholder="e.g. 98"
+                            min="50"
+                            max="100"
+                            className={spo2 !== '' && Number(spo2) < 90 ? 'vitals-input vitals-input--danger' : 'vitals-input'}
+                          />
+                          {spo2 !== '' && Number(spo2) < 90 && (
+                            <span className="vitals-warn">⚠️ Hypoxia! (&lt;90% SpO2)</span>
+                          )}
+                          <small className="hint">Normal: 95–100%. Danger: &lt;90%</small>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-actions">
@@ -573,6 +730,39 @@ function App() {
                       <p><strong>AI Analysis &amp; Clinical Justification:</strong></p>
                       <p>{triageResult.reasoning}</p>
                     </div>
+
+                    {/* ── Clinical Case Sheet (Voice Scribe output) ── */}
+                    {triageResult.caseSheet && (
+                      <div className="case-sheet-panel">
+                        <div className="case-sheet-header">🩺 AI Clinical Case Sheet Snapshot</div>
+                        {triageResult.caseSheet.symptoms_detected?.length > 0 && (
+                          <div className="case-sheet-row">
+                            <span className="cs-label">Symptoms Detected</span>
+                            <div className="cs-tags">
+                              {triageResult.caseSheet.symptoms_detected.map((s, i) => (
+                                <span key={i} className="cs-tag cs-tag--symptom">{s}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {triageResult.caseSheet.duration_inferred?.length > 0 && (
+                          <div className="case-sheet-row">
+                            <span className="cs-label">Duration Inferred</span>
+                            <div className="cs-tags">
+                              {triageResult.caseSheet.duration_inferred.map((d, i) => (
+                                <span key={i} className="cs-tag cs-tag--duration">{d}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {triageResult.caseSheet.clinical_snapshot && (
+                          <div className="case-sheet-row">
+                            <span className="cs-label">Clinical Snapshot</span>
+                            <p className="cs-snapshot">{triageResult.caseSheet.clinical_snapshot}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {triageResult.recommendedHospital && (
                       <div className="hospital-info">
                         <div className="hospital-title">
@@ -706,17 +896,25 @@ function App() {
                   type="tel"
                   id="checkoutPhone"
                   value={patientPhone}
+                  maxLength={10}
                   onChange={(e) => {
-                    const cleaned = e.target.value.replace(/[^0-9+\s\-()]/g, '');
-                    setPatientPhone(cleaned);
-                    setPhoneError('');
+                    // Only allow digits, max 10 chars
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setPatientPhone(digits);
+                    if (digits.length > 0 && digits.length < 10) {
+                      setPhoneError(`${10 - digits.length} more digit${10 - digits.length > 1 ? 's' : ''} needed`);
+                    } else if (digits.length === 10 && !/^[6-9]/.test(digits)) {
+                      setPhoneError('Number must start with 6, 7, 8 or 9');
+                    } else {
+                      setPhoneError('');
+                    }
                   }}
                   className={phoneError ? 'input-error' : ''}
-                  placeholder="e.g. +91 98765 43210"
+                  placeholder="10-digit mobile number"
                   required
                 />
                 {phoneError && <small className="field-error">{phoneError}</small>}
-                <small className="hint">An SMS confirmation will be dispatched to this number.</small>
+                <small className="hint">Enter your 10-digit Indian mobile number. An SMS will be sent on confirmation.</small>
               </div>
 
               {bookingError && (
