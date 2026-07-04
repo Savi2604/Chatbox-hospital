@@ -163,7 +163,7 @@ function TriageDashboard({ severity, queueInfo, patientId }) {
 }
 
 // ── Main App ────────────────────────────────────────────────────────────────
-function App({ onOpenAdmin }) {
+function App({ onOpenAdmin, onSplitScreen }) {
   const [patientId, setPatientId]     = useState('');
   const [symptoms, setSymptoms]       = useState('');
   const [patientData, setPatientData] = useState(null);
@@ -424,6 +424,17 @@ function App({ onOpenAdmin }) {
               title="Hospital Staff Dashboard"
             >
               🖥️ Staff Dashboard
+            </button>
+          )}
+          {/* ── Split Screen Button ── */}
+          {onSplitScreen && (
+            <button
+              className="admin-portal-btn"
+              onClick={onSplitScreen}
+              title="Split Screen: Patient + Admin side by side"
+              style={{ background: 'rgba(99,102,241,0.12)', borderColor: 'rgba(99,102,241,0.3)', color: '#a5b4fc' }}
+            >
+              ⚡ Split Screen
             </button>
           )}
         </div>
