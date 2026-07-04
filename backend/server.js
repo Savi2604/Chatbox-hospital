@@ -440,25 +440,86 @@ function buildLocalCaseSheet(transcript) {
   return { symptoms_detected, duration_inferred, clinical_snapshot };
 }
 
+// ─── DISEASE-TO-SYMPTOM RULE ENGINE DATASET ──────────────────────────────────
+// Loads the structured clinical classification map from diseaseMap.json.
+// Used to scan incoming patient symptoms and enforce severity/department routing.
+const diseaseMap = require('./diseaseMap.json');
+
+/**
+ * runDiseaseRuleEngine(symptomText)
+ * Scans the patient's unstructured symptom text against every sub_symptom
+ * in the diseaseMap. Returns:
+ *   { matched: bool, highSeverityOverride: bool, matchedCategory, matchedSymptoms[] }
+ */
+function runDiseaseRuleEngine(symptomText) {
+  if (!symptomText) return { matched: false, highSeverityOverride: false };
+
+  const text = symptomText.toLowerCase();
+  let bestMatch = null;
+  let highSeverityOverride = false;
+  const allMatchedSymptoms = [];
+
+  for (const category of diseaseMap.categories) {
+    const hits = category.sub_symptoms.filter(s => text.includes(s.toLowerCase()));
+    if (hits.length > 0) {
+      allMatchedSymptoms.push(...hits);
+      // Track highest-severity category match
+      if (
+        !bestMatch ||
+        (category.baseline_severity === 'High') ||
+        (category.baseline_severity === 'Medium' && bestMatch.baseline_severity === 'Low')
+      ) {
+        bestMatch = { ...category, matchedHits: hits };
+      }
+      if (category.baseline_severity === 'High') {
+        highSeverityOverride = true;
+      }
+    }
+  }
+
+  if (bestMatch) {
+    console.log(
+      `[DISEASE ENGINE] Matched category: "${bestMatch.label}" | ` +
+      `Hits: [${bestMatch.matchedHits.join(', ')}] | ` +
+      `Severity: ${bestMatch.baseline_severity} | ` +
+      `Dept: ${bestMatch.specialist_department}`
+    );
+  }
+
+  return {
+    matched: !!bestMatch,
+    highSeverityOverride,
+    matchedCategory: bestMatch || null,
+    matchedSymptoms: [...new Set(allMatchedSymptoms)],
+  };
+}
+
 // ─── API ENDPOINTS ────────────────────────────────────────────────────────────
 
 // POST /api/triage
 app.post('/api/triage', async (req, res) => {
-  const { patientId, currentSymptoms, isVoiceInput, pulseRate, spo2 } = req.body;
+  // selectedSymptoms = array of checkbox-selected symptoms from the Quick-Select UI panel
+  const { patientId, currentSymptoms, isVoiceInput, pulseRate, selectedSymptoms } = req.body;
   if (!patientId || !currentSymptoms) {
     return res.status(400).json({ error: 'Patient ID and symptoms are required.' });
   }
 
-  // ── IoT Vitals Override Check ─────────────────────────────────────────────
-  const pulseNum = pulseRate !== null && pulseRate !== undefined ? Number(pulseRate) : null;
-  const spo2Num  = spo2      !== null && spo2      !== undefined ? Number(spo2)      : null;
-  const vitalsCriticalOverride = (
-    (pulseNum !== null && !isNaN(pulseNum) && pulseNum > 120) ||
-    (spo2Num  !== null && !isNaN(spo2Num)  && spo2Num  < 90)
-  );
+  // ── Merge quick-select checkbox symptoms into the symptom text ────────────
+  // Appends selected checkbox badges to the freetext for rule engine scanning
+  const mergedSymptoms = selectedSymptoms && selectedSymptoms.length > 0
+    ? `${currentSymptoms}. Additional selected symptoms: ${selectedSymptoms.join(', ')}.`
+    : currentSymptoms;
 
-  if (vitalsCriticalOverride) {
-    console.log(`[VITALS ENGINE] 🚨 CRITICAL OVERRIDE — Pulse: ${pulseNum} BPM, SpO2: ${spo2Num}%. Severity forced to HIGH for ${patientId}.`);
+  // ── Pulse Rate check (kept for basic tachycardia detection) ──────────────
+  const pulseNum = pulseRate !== null && pulseRate !== undefined ? Number(pulseRate) : null;
+  const pulseCritical = pulseNum !== null && !isNaN(pulseNum) && pulseNum > 120;
+
+  // ── Disease-to-Symptom Rule Engine ───────────────────────────────────────
+  const ruleResult = runDiseaseRuleEngine(mergedSymptoms);
+  const diseaseOverride = ruleResult.highSeverityOverride || pulseCritical;
+
+  if (diseaseOverride) {
+    console.log(`[DISEASE ENGINE] 🚨 CRITICAL OVERRIDE triggered for ${patientId}. Severity forced to HIGH.`);
   }
 
   try {
@@ -468,7 +529,7 @@ app.post('/api/triage', async (req, res) => {
       patientsDB[patientId] = patient;
     }
 
-    const recommendation = await getAIRecommendation(patient.history, currentSymptoms, isVoiceInput === true);
+    const recommendation = await getAIRecommendation(patient.history, mergedSymptoms, isVoiceInput === true);
     const doctors = spawnDynamicDoctors(
       recommendation.department,
       recommendation.recommendedHospital,
@@ -476,9 +537,16 @@ app.post('/api/triage', async (req, res) => {
       recommendation.hospitalPhone
     );
 
-    // ── Apply vitals hard-override AFTER AI recommendation ───────────────────────
+    // ── Apply Disease Rule Engine hard-override AFTER AI recommendation ──────
     let severity = recommendation.severity || 'Low';
-    if (vitalsCriticalOverride) severity = 'High';
+    if (diseaseOverride) severity = 'High';
+    // If rule engine matched a specific dept, prefer it unless AI found something better
+    if (ruleResult.matched && ruleResult.matchedCategory && severity !== 'High') {
+      // Only nudge department if AI returned General Medicine and we have a specific match
+      if (recommendation.department === 'General Medicine') {
+        recommendation.department = ruleResult.matchedCategory.specialist_department;
+      }
+    }
 
     // ── Build local case sheet if voice mode and AI didn’t return one ────────────
     let caseSheet = null;
@@ -490,23 +558,23 @@ app.post('/api/triage', async (req, res) => {
     // ── Process Dynamic Queue Triage ───────────────────────────────────────
     const queueInfo = processQueueEntry(recommendation.department, patientId, severity);
 
-    // ── Backfill vitals & clinical snapshot onto the live queue entry ──────
-    // So the admin dashboard can display these fields without a separate lookup
+    // ── Backfill data onto the live queue entry for admin dashboard ──────────
     const liveQueue = departmentQueues[recommendation.department];
     if (liveQueue && liveQueue.length > 0) {
       const myEntry = liveQueue.find(e => e.patientId === patientId);
       if (myEntry) {
-        myEntry.pulseRate        = pulseNum   || null;
-        myEntry.spo2             = spo2Num    || null;
+        myEntry.pulseRate        = pulseNum || null;
         myEntry.clinicalSnapshot = caseSheet ? caseSheet.clinicalCaseSnapshot || null : null;
-        myEntry.symptomsDetected = caseSheet ? caseSheet.symptoms_detected    || [] : [];
-        myEntry.symptoms         = currentSymptoms;
+        myEntry.symptomsDetected = ruleResult.matchedSymptoms.length > 0
+          ? ruleResult.matchedSymptoms
+          : (caseSheet ? caseSheet.symptoms_detected || [] : []);
+        myEntry.symptoms         = mergedSymptoms;
       }
     }
 
-    // Build vitals overlay string for reasoning if override was triggered
-    const vitalsNote = vitalsCriticalOverride
-      ? ` [IoT VITALS OVERRIDE: Pulse=${pulseNum ?? 'N/A'} BPM, SpO2=${spo2Num ?? 'N/A'}% — Critical values detected. Priority forced.]`
+    // Build disease engine note string for reasoning if override was triggered
+    const vitalsNote = diseaseOverride
+      ? ` [DISEASE ENGINE OVERRIDE: Matched "${ruleResult.matchedCategory?.label || 'Critical Symptoms'}" — High severity symptoms detected. Priority forced.]`
       : '';
 
     res.json({
@@ -515,7 +583,13 @@ app.post('/api/triage', async (req, res) => {
         department:               recommendation.department,
         reasoning:                recommendation.reasoning + vitalsNote,
         severity,
-        vitalsCriticalOverride,
+        diseaseOverride,
+        ruleEngineResult: {
+          matched:          ruleResult.matched,
+          matchedCategory:  ruleResult.matchedCategory?.label || null,
+          matchedSymptoms:  ruleResult.matchedSymptoms,
+          department:       ruleResult.matchedCategory?.specialist_department || null,
+        },
         recommendedHospital:      recommendation.recommendedHospital,
         hospitalLocation:         recommendation.hospitalLocation,
         hospitalPhone:            recommendation.hospitalPhone,

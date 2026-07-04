@@ -2559,3 +2559,117 @@ body {
   box-shadow: 0 0 12px rgba(20,184,166,0.3);
   transform: translateY(-1px);
 }
+
+/* ============================================================
+   QUICK-SELECT CATEGORIZED SYMPTOMS — STYLES
+   ============================================================ */
+
+/* ── Category block ── */
+.qs-category {
+  margin-bottom: 1rem;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* ── Category header bar ── */
+.qs-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.qs-sev--high   { background: rgba(239,68,68,0.12);   color: #fca5a5; }
+.qs-sev--medium { background: rgba(245,158,11,0.12);  color: #fbbf24; }
+.qs-sev--low    { background: rgba(16,185,129,0.1);   color: #6ee7b7; }
+
+/* ── Severity badge inside header ── */
+.qs-sev-badge {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-weight: 700;
+}
+.qs-sev-badge--high   { background: rgba(239,68,68,0.2);  border: 1px solid rgba(239,68,68,0.4); }
+.qs-sev-badge--medium { background: rgba(245,158,11,0.2); border: 1px solid rgba(245,158,11,0.4); }
+.qs-sev-badge--low    { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); }
+
+/* ── Department tag ── */
+.qs-dept-tag {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: #a5b4fc;
+  background: rgba(99,102,241,0.12);
+  border: 1px solid rgba(99,102,241,0.25);
+  border-radius: 5px;
+  padding: 0.15rem 0.5rem;
+}
+
+/* ── Chips grid ── */
+.qs-chips-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.65rem;
+  background: rgba(0,0,0,0.15);
+}
+
+/* ── Individual chip button ── */
+.qs-chip {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #94a3b8;
+  border-radius: 20px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.qs-chip:hover {
+  background: rgba(20,184,166,0.12);
+  border-color: rgba(20,184,166,0.35);
+  color: #5eead4;
+  transform: translateY(-1px);
+}
+.qs-chip--active {
+  background: rgba(20,184,166,0.2);
+  border-color: rgba(20,184,166,0.6);
+  color: #2dd4bf;
+  font-weight: 600;
+  box-shadow: 0 0 8px rgba(20,184,166,0.2);
+}
+.qs-chip--selected {
+  background: rgba(239,68,68,0.15);
+  border-color: rgba(239,68,68,0.4);
+  color: #fca5a5;
+  cursor: pointer;
+}
+
+/* ── Selected preview row ── */
+.qs-selected-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.5rem 0;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  align-items: center;
+}
+.qs-clear-btn {
+  background: none;
+  border: 1px solid rgba(239,68,68,0.3);
+  color: #f87171;
+  border-radius: 8px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-family: inherit;
+}
+.qs-clear-btn:hover { background: rgba(239,68,68,0.1); }

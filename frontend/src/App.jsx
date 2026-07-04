@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import diseaseMap from './diseaseMap.json';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -222,11 +223,22 @@ function App({ onOpenAdmin, onSplitScreen }) {
 
   const [isVoiceInput, setIsVoiceInput] = useState(false);
 
-  // ── IoT Vitals Panel ──────────────────────────────────────────────────────
+  // ── IoT Vitals Panel (pulse only, spo2 removed) ──────────────────────
   const [vitalsOpen, setVitalsOpen]   = useState(false);
   const [pulseRate,  setPulseRate]    = useState('');
-  const [spo2,       setSpo2]         = useState('');
   const [vitalsCritical, setVitalsCritical] = useState(false);
+
+  // ── Quick-Select Disease Symptoms ──────────────────────────────────
+  const [symptomsOpen, setSymptomsOpen] = useState(false);
+  const [selectedSymptoms, setSelectedSymptoms] = useState([]);
+
+  const toggleSymptom = (symptom) => {
+    setSelectedSymptoms(prev =>
+      prev.includes(symptom)
+        ? prev.filter(s => s !== symptom)
+        : [...prev, symptom]
+    );
+  };
 
   // ── Triage ──────────────────────────────────────────────────────────────────
   const handleTriage = async (e) => {
@@ -244,8 +256,8 @@ function App({ onOpenAdmin, onSplitScreen }) {
           patientId,
           currentSymptoms: symptoms,
           isVoiceInput,
-          pulseRate:  pulseRate  !== '' ? Number(pulseRate)  : null,
-          spo2:       spo2       !== '' ? Number(spo2)       : null,
+          pulseRate: pulseRate !== '' ? Number(pulseRate) : null,
+          selectedSymptoms,
         }),
       });
 
@@ -259,7 +271,7 @@ function App({ onOpenAdmin, onSplitScreen }) {
 
       setPatientData(data.patient);
       setTriageResult(data.triageResult);
-      setVitalsCritical(data.triageResult.vitalsCriticalOverride === true);
+      setVitalsCritical(data.triageResult.diseaseOverride === true);
 
       // Pre-fill mobile from DB if available
       if (data.patient.mobile && data.patient.mobile !== '+91-XXXXXXXXXX') {
@@ -400,7 +412,7 @@ function App({ onOpenAdmin, onSplitScreen }) {
     setIsVoiceInput(false);
     setVitalsCritical(false);
     setPulseRate('');
-    setSpo2('');
+    setSelectedSymptoms([]);
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -672,8 +684,71 @@ function App({ onOpenAdmin, onSplitScreen }) {
                   <small className="hint">💡 Tip: Use the 🎙️ mic to speak symptoms. Type or voice — both trigger priority routing.</small>
                 </div>
 
-                {/* ── IoT Vitals Panel ── */}
+                {/* ── Quick-Select Categorized Symptoms ── */}
                 <div className="vitals-panel">
+                  <button
+                    type="button"
+                    className="vitals-toggle-btn"
+                    onClick={() => setSymptomsOpen(v => !v)}
+                    aria-expanded={symptomsOpen}
+                  >
+                    <span className="vitals-toggle-icon">{symptomsOpen ? '▼' : '▶'}</span>
+                    <span>🩺 Quick-Select Categorized Symptoms</span>
+                    {selectedSymptoms.length > 0 && (
+                      <span className="vitals-active-badge">{selectedSymptoms.length} SELECTED</span>
+                    )}
+                  </button>
+
+                  {symptomsOpen && (
+                    <div className="vitals-inputs">
+                      <p className="vitals-desc">
+                        Click symptoms that match the patient's condition. Selected items are automatically merged into the AI analysis for precise department routing and severity detection.
+                      </p>
+
+                      {/* ── Selected chips preview ── */}
+                      {selectedSymptoms.length > 0 && (
+                        <div className="qs-selected-preview">
+                          {selectedSymptoms.map(s => (
+                            <span key={s} className="qs-chip qs-chip--selected" onClick={() => toggleSymptom(s)}>
+                              ✕ {s}
+                            </span>
+                          ))}
+                          <button type="button" className="qs-clear-btn" onClick={() => setSelectedSymptoms([])}>
+                            Clear All
+                          </button>
+                        </div>
+                      )}
+
+                      {/* ── Category grids ── */}
+                      {diseaseMap.categories.map(cat => (
+                        <div key={cat.id} className="qs-category">
+                          <div className={`qs-category-header qs-sev--${cat.baseline_severity.toLowerCase()}`}>
+                            <span>{cat.icon} {cat.label}</span>
+                            <span className="qs-dept-tag">{cat.specialist_department}</span>
+                            <span className={`qs-sev-badge qs-sev-badge--${cat.baseline_severity.toLowerCase()}`}>
+                              {cat.baseline_severity === 'High' ? '🚨' : cat.baseline_severity === 'Medium' ? '⚠️' : '✓'} {cat.baseline_severity}
+                            </span>
+                          </div>
+                          <div className="qs-chips-grid">
+                            {cat.sub_symptoms.map(symptom => (
+                              <button
+                                key={symptom}
+                                type="button"
+                                className={`qs-chip ${selectedSymptoms.includes(symptom) ? 'qs-chip--active' : ''}`}
+                                onClick={() => toggleSymptom(symptom)}
+                              >
+                                {symptom}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Pulse Rate Input (kept for tachycardia detection) ── */}
+                <div className="vitals-panel" style={{ marginTop: '0.5rem' }}>
                   <button
                     type="button"
                     className="vitals-toggle-btn"
@@ -681,48 +756,27 @@ function App({ onOpenAdmin, onSplitScreen }) {
                     aria-expanded={vitalsOpen}
                   >
                     <span className="vitals-toggle-icon">{vitalsOpen ? '▼' : '▶'}</span>
-                    <span>💓 Simulate Patient Vitals (IoT Input Integration)</span>
-                    {(pulseRate || spo2) && <span className="vitals-active-badge">VITALS ACTIVE</span>}
+                    <span>💓 Pulse Rate Monitor (IoT Input)</span>
+                    {pulseRate && <span className="vitals-active-badge">VITALS ACTIVE</span>}
                   </button>
-
                   {vitalsOpen && (
                     <div className="vitals-inputs">
-                      <p className="vitals-desc">Optionally simulate real-time patient vitals from an IoT device. Dangerously abnormal values will auto-escalate triage severity to CRITICAL.</p>
-                      <div className="vitals-row">
-                        <div className="vitals-field">
-                          <label htmlFor="pulseRate">❤️ Pulse Rate (BPM)</label>
-                          <input
-                            type="number"
-                            id="pulseRate"
-                            value={pulseRate}
-                            onChange={e => setPulseRate(e.target.value)}
-                            placeholder="e.g. 72"
-                            min="30"
-                            max="250"
-                            className={pulseRate !== '' && Number(pulseRate) > 120 ? 'vitals-input vitals-input--danger' : 'vitals-input'}
-                          />
-                          {pulseRate !== '' && Number(pulseRate) > 120 && (
-                            <span className="vitals-warn">⚠️ Tachycardia! (&gt;120 BPM)</span>
-                          )}
-                          <small className="hint">Normal: 60–100 BPM. Danger: &gt;120 BPM</small>
-                        </div>
-                        <div className="vitals-field">
-                          <label htmlFor="spo2">🫁 Oxygen Level (SpO2 %)</label>
-                          <input
-                            type="number"
-                            id="spo2"
-                            value={spo2}
-                            onChange={e => setSpo2(e.target.value)}
-                            placeholder="e.g. 98"
-                            min="50"
-                            max="100"
-                            className={spo2 !== '' && Number(spo2) < 90 ? 'vitals-input vitals-input--danger' : 'vitals-input'}
-                          />
-                          {spo2 !== '' && Number(spo2) < 90 && (
-                            <span className="vitals-warn">⚠️ Hypoxia! (&lt;90% SpO2)</span>
-                          )}
-                          <small className="hint">Normal: 95–100%. Danger: &lt;90%</small>
-                        </div>
+                      <div className="vitals-field">
+                        <label htmlFor="pulseRate">❤️ Pulse Rate (BPM)</label>
+                        <input
+                          type="number"
+                          id="pulseRate"
+                          value={pulseRate}
+                          onChange={e => setPulseRate(e.target.value)}
+                          placeholder="e.g. 72"
+                          min="30"
+                          max="250"
+                          className={pulseRate !== '' && Number(pulseRate) > 120 ? 'vitals-input vitals-input--danger' : 'vitals-input'}
+                        />
+                        {pulseRate !== '' && Number(pulseRate) > 120 && (
+                          <span className="vitals-warn">⚠️ Tachycardia! (&gt;120 BPM) — Auto-escalates to HIGH</span>
+                        )}
+                        <small className="hint">Normal: 60–100 BPM. Danger: &gt;120 BPM</small>
                       </div>
                     </div>
                   )}

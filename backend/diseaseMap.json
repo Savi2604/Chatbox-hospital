@@ -1,0 +1,137 @@
+{
+  "categories": [
+    {
+      "id": "chest_pain",
+      "label": "Chest Pain",
+      "icon": "🫀",
+      "baseline_severity": "High",
+      "specialist_department": "Cardiology",
+      "sub_symptoms": [
+        "radiating arm pain",
+        "heavy chest pressure",
+        "sweating with chest pain",
+        "palpitations",
+        "sudden breathlessness",
+        "jaw or neck pain",
+        "left shoulder pain",
+        "crushing chest tightness",
+        "chest pain at rest",
+        "rapid irregular heartbeat"
+      ]
+    },
+    {
+      "id": "respiratory",
+      "label": "Respiratory Distress",
+      "icon": "🫁",
+      "baseline_severity": "High",
+      "specialist_department": "Pulmonology",
+      "sub_symptoms": [
+        "shortness of breath",
+        "difficulty breathing",
+        "wheezing",
+        "persistent cough",
+        "blood in sputum",
+        "chest tightness while breathing",
+        "rapid breathing",
+        "bluish lips or fingertips",
+        "breathing worse lying down",
+        "coughing at night"
+      ]
+    },
+    {
+      "id": "head_pain",
+      "label": "Head Pain",
+      "icon": "🧠",
+      "baseline_severity": "Medium",
+      "specialist_department": "Neurology",
+      "sub_symptoms": [
+        "migraine aura",
+        "severe throbbing headache",
+        "vision blur with headache",
+        "sudden worst headache of life",
+        "headache with nausea",
+        "sensitivity to light",
+        "sensitivity to sound",
+        "one-sided head pain",
+        "headache after head injury",
+        "headache with neck stiffness"
+      ]
+    },
+    {
+      "id": "abdominal",
+      "label": "Abdominal Pain",
+      "icon": "🤢",
+      "baseline_severity": "Medium",
+      "specialist_department": "General Medicine",
+      "sub_symptoms": [
+        "severe stomach cramps",
+        "nausea and vomiting",
+        "diarrhea",
+        "bloating",
+        "loss of appetite",
+        "blood in stool",
+        "persistent indigestion",
+        "right lower abdominal pain",
+        "burning sensation stomach",
+        "pain after eating"
+      ]
+    },
+    {
+      "id": "eye_pain",
+      "label": "Eye Problems",
+      "icon": "👁️",
+      "baseline_severity": "Medium",
+      "specialist_department": "Ophthalmology",
+      "sub_symptoms": [
+        "sudden vision loss",
+        "double vision",
+        "eye redness",
+        "eye pain",
+        "flashes of light",
+        "floaters in vision",
+        "blurred vision",
+        "watery or discharge from eye",
+        "sensitivity to light",
+        "swollen eyelid"
+      ]
+    },
+    {
+      "id": "body_pain",
+      "label": "Body Pain & Fatigue",
+      "icon": "💪",
+      "baseline_severity": "Low",
+      "specialist_department": "General Medicine",
+      "sub_symptoms": [
+        "general fatigue",
+        "mild muscle aches",
+        "joint pain",
+        "back pain",
+        "body weakness",
+        "fever",
+        "chills",
+        "sore throat",
+        "runny nose",
+        "mild headache"
+      ]
+    },
+    {
+      "id": "womens_health",
+      "label": "Women's Health",
+      "icon": "🌸",
+      "baseline_severity": "Medium",
+      "specialist_department": "Gynecology",
+      "sub_symptoms": [
+        "severe menstrual cramps",
+        "irregular periods",
+        "pelvic pain",
+        "unusual vaginal discharge",
+        "pain during pregnancy",
+        "breast pain or lumps",
+        "nausea during pregnancy",
+        "heavy bleeding",
+        "lower back pain during period",
+        "hormonal imbalance symptoms"
+      ]
+    }
+  ]
+}
