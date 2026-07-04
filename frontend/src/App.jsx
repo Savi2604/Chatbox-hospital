@@ -163,7 +163,7 @@ function TriageDashboard({ severity, queueInfo, patientId }) {
 }
 
 // ── Main App ────────────────────────────────────────────────────────────────
-function App() {
+function App({ onOpenAdmin }) {
   const [patientId, setPatientId]     = useState('');
   const [symptoms, setSymptoms]       = useState('');
   const [patientData, setPatientData] = useState(null);
@@ -416,6 +416,16 @@ function App() {
           </div>
           <h1>Intelligent Dynamic Queue-Time Triage</h1>
           <p>Priority Routing · Real-Time ETA · Severity Intelligence</p>
+          {/* ── Staff / Admin Portal Button ── */}
+          {onOpenAdmin && (
+            <button
+              className="admin-portal-btn"
+              onClick={onOpenAdmin}
+              title="Hospital Staff Dashboard"
+            >
+              🖥️ Staff Dashboard
+            </button>
+          )}
         </div>
       </header>
 

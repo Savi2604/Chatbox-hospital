@@ -490,6 +490,20 @@ app.post('/api/triage', async (req, res) => {
     // ── Process Dynamic Queue Triage ───────────────────────────────────────
     const queueInfo = processQueueEntry(recommendation.department, patientId, severity);
 
+    // ── Backfill vitals & clinical snapshot onto the live queue entry ──────
+    // So the admin dashboard can display these fields without a separate lookup
+    const liveQueue = departmentQueues[recommendation.department];
+    if (liveQueue && liveQueue.length > 0) {
+      const myEntry = liveQueue.find(e => e.patientId === patientId);
+      if (myEntry) {
+        myEntry.pulseRate        = pulseNum   || null;
+        myEntry.spo2             = spo2Num    || null;
+        myEntry.clinicalSnapshot = caseSheet ? caseSheet.clinicalCaseSnapshot || null : null;
+        myEntry.symptomsDetected = caseSheet ? caseSheet.symptoms_detected    || [] : [];
+        myEntry.symptoms         = currentSymptoms;
+      }
+    }
+
     // Build vitals overlay string for reasoning if override was triggered
     const vitalsNote = vitalsCriticalOverride
       ? ` [IoT VITALS OVERRIDE: Pulse=${pulseNum ?? 'N/A'} BPM, SpO2=${spo2Num ?? 'N/A'}% — Critical values detected. Priority forced.]`
@@ -521,6 +535,51 @@ app.get('/api/queue/:department', (req, res) => {
   const dept = req.params.department;
   const queue = departmentQueues[dept] || [];
   res.json({ department: dept, totalInQueue: queue.length, queue });
+});
+
+// ── GET /api/admin/queue ─────────────────────────────────────────────────────
+// Aggregates ALL department queues into a single unified feed for the
+// Hospital Receptionist / Admin Live Dashboard.
+// Sort order: HIGH severity first (priority override at top), then by issuedAt
+// timestamp ascending (earliest registration first within same severity tier).
+app.get('/api/admin/queue', (req, res) => {
+  const allEntries = [];
+
+  // Iterate every active department queue and enrich each entry
+  Object.entries(departmentQueues).forEach(([department, queue]) => {
+    queue.forEach(entry => {
+      const patient = patientsDB[entry.patientId] || {};
+      allEntries.push({
+        tokenNumber:       entry.tokenNumber,
+        patientId:         entry.patientId,
+        patientName:       patient.name || `Patient ${entry.patientId}`,
+        department,
+        severity:          entry.severity,
+        isHighPriority:    entry.isHighPriority,
+        estimatedWaitMins: entry.estimatedWaitMins,
+        issuedAt:          entry.issuedAt,
+        // Vitals and clinical snapshot are attached by the triage engine
+        pulseRate:         entry.pulseRate   || null,
+        spo2:              entry.spo2        || null,
+        clinicalSnapshot:  entry.clinicalSnapshot || null,
+        symptomsDetected:  entry.symptomsDetected || [],
+      });
+    });
+  });
+
+  // Sort: High severity always floats to top; within same tier sort by issuedAt
+  const severityRank = { High: 0, Medium: 1, Low: 2 };
+  allEntries.sort((a, b) => {
+    const rankDiff = (severityRank[a.severity] ?? 2) - (severityRank[b.severity] ?? 2);
+    if (rankDiff !== 0) return rankDiff;
+    return (a.issuedAt || 0) - (b.issuedAt || 0);
+  });
+
+  res.json({
+    totalActive: allEntries.length,
+    lastUpdated: new Date().toISOString(),
+    queue: allEntries,
+  });
 });
 
 // POST /api/appointments  ← STATELESS: all details come from the request body
