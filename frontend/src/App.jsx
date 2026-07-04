@@ -747,40 +747,6 @@ function App({ onOpenAdmin, onSplitScreen }) {
                   )}
                 </div>
 
-                {/* ── Pulse Rate Input (kept for tachycardia detection) ── */}
-                <div className="vitals-panel" style={{ marginTop: '0.5rem' }}>
-                  <button
-                    type="button"
-                    className="vitals-toggle-btn"
-                    onClick={() => setVitalsOpen(v => !v)}
-                    aria-expanded={vitalsOpen}
-                  >
-                    <span className="vitals-toggle-icon">{vitalsOpen ? '▼' : '▶'}</span>
-                    <span>💓 Pulse Rate Monitor (IoT Input)</span>
-                    {pulseRate && <span className="vitals-active-badge">VITALS ACTIVE</span>}
-                  </button>
-                  {vitalsOpen && (
-                    <div className="vitals-inputs">
-                      <div className="vitals-field">
-                        <label htmlFor="pulseRate">❤️ Pulse Rate (BPM)</label>
-                        <input
-                          type="number"
-                          id="pulseRate"
-                          value={pulseRate}
-                          onChange={e => setPulseRate(e.target.value)}
-                          placeholder="e.g. 72"
-                          min="30"
-                          max="250"
-                          className={pulseRate !== '' && Number(pulseRate) > 120 ? 'vitals-input vitals-input--danger' : 'vitals-input'}
-                        />
-                        {pulseRate !== '' && Number(pulseRate) > 120 && (
-                          <span className="vitals-warn">⚠️ Tachycardia! (&gt;120 BPM) — Auto-escalates to HIGH</span>
-                        )}
-                        <small className="hint">Normal: 60–100 BPM. Danger: &gt;120 BPM</small>
-                      </div>
-                    </div>
-                  )}
-                </div>
 
                 <div className="form-actions">
                   <button type="submit" disabled={loading} className="btn-primary">
