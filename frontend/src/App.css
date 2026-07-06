@@ -2673,3 +2673,155 @@ body {
   font-family: inherit;
 }
 .qs-clear-btn:hover { background: rgba(239,68,68,0.1); }
+
+
+/* ============================================================
+   HIGH-CONTRAST NEON THEME DARK BACKGROUND OVERRIDES
+   ============================================================ */
+
+/* ── 1. Global Contrast & Base Styles ── */
+body, html, .app-container, .admin-root {
+  background-color: #000000 !important;
+  background-image: none !important; /* Remove any lighter gradients */
+  color: #f4f4f5 !important; /* High-contrast zinc-100 crisp white */
+}
+
+/* Base text inputs and text labels */
+.form-group label, 
+.vitals-field label, 
+.token-label,
+.admin-stat-label {
+  color: #e2e8f0 !important; /* High-contrast bright silver */
+}
+
+/* User Chat Bubble / SMS Confirmation Bubble - Electric Neon Blue */
+.sms-bubble, .user-chat-bubble {
+  background-color: rgba(37, 99, 235, 0.2) !important;
+  border: 1px solid #3b82f6 !important;
+  color: #bfdbfe !important;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.4) !important;
+}
+
+/* System/AI Response Blocks - Slate Dark with Violet Glow Border */
+.recommendation-card, 
+.case-sheet-panel,
+.patient-card,
+.confirmed-card {
+  background-color: #0b0f19 !important;
+  border: 1.5px solid #8b5cf6 !important;
+  color: #f1f5f9 !important;
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.45) !important;
+}
+
+/* ── 2. Dynamic Intensity Status Badges ── */
+
+/* CRITICAL OVERRIDE (High Severity) - Electric Neon Red */
+.severity-badge-high, 
+.confirmed-severity-badge.severity-badge-high,
+.admin-badge--critical {
+  background-color: rgba(76, 29, 29, 0.8) !important;
+  border: 1.5px solid #ef4444 !important;
+  color: #f87171 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.6) !important;
+  animation: neonRedPulse 1.5s infinite !important;
+}
+
+/* MID TRIAGE (Medium Severity) - Vibrant Amber/Neon Orange */
+.severity-badge-medium, 
+.confirmed-severity-badge.severity-badge-medium,
+.admin-badge--mid {
+  background-color: rgba(69, 26, 3, 0.8) !important;
+  border: 1.5px solid #f59e0b !important;
+  color: #fbbf24 !important;
+  font-weight: 600 !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.4) !important;
+}
+
+/* STANDARD (Low Severity) - Cyberpunk Neon Green */
+.severity-badge-low, 
+.confirmed-severity-badge.severity-badge-low,
+.admin-badge--standard {
+  background-color: rgba(6, 78, 59, 0.8) !important;
+  border: 1.5px solid #10b981 !important;
+  color: #34d399 !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4) !important;
+}
+
+/* Pulse Keyframes for Critical Red */
+@keyframes neonRedPulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.6);
+    background-color: rgba(76, 29, 29, 0.8);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.9);
+    background-color: rgba(127, 29, 29, 0.95);
+  }
+}
+
+/* ── 3. Interactive Components & Actions ── */
+
+/* Active Mic Button Pink/Magenta Glow & Pulse */
+.mic-btn--active {
+  background: rgba(219, 39, 119, 0.25) !important;
+  border-color: #ec4899 !important;
+  color: #f472b6 !important;
+  box-shadow: 0 0 20px rgba(236, 72, 153, 0.8) !important;
+  animation: neonPinkPulse 1.4s ease-in-out infinite !important;
+}
+
+@keyframes neonPinkPulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(236, 72, 153, 0.7);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(236, 72, 153, 1);
+    transform: scale(1.02);
+  }
+}
+
+/* Quick-Select Checked Badges (Electric Cyan/Teal border & glow) */
+.qs-chip {
+  background-color: #27272a !important; /* Zinc-800 */
+  border: 1.5px solid #3f3f46 !important; /* Zinc-700 */
+  color: #a1a1aa !important; /* Zinc-400 */
+  box-shadow: none !important;
+}
+.qs-chip:hover {
+  background-color: #3f3f46 !important;
+  color: #ffffff !important;
+}
+.qs-chip--active, .qs-chip--selected {
+  border-color: #22d3ee !important; /* Electric Cyan */
+  color: #67e8f9 !important; /* Cyan 300 */
+  background-color: rgba(8, 79, 120, 0.5) !important; /* Cyan-950/50 */
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.6) !important;
+}
+
+/* Admin Table Neon Customizations */
+.admin-table thead tr {
+  background-color: rgba(8, 79, 120, 0.2) !important;
+  border-bottom: 2px solid rgba(34, 211, 238, 0.6) !important;
+}
+.admin-table th {
+  color: #22d3ee !important; /* Cyan 400 */
+  font-weight: 800 !important;
+  text-shadow: 0 0 8px rgba(34, 211, 238, 0.4) !important;
+}
+.admin-row {
+  border-bottom: 1px solid rgba(34, 211, 238, 0.15) !important;
+}
+.admin-row:hover {
+  background-color: rgba(34, 211, 238, 0.06) !important;
+}
+.admin-row--critical {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  border-bottom: 1.5px solid rgba(239, 68, 68, 0.4) !important;
+  animation: adminRowCriticalPulse 2s infinite !important;
+}
+@keyframes adminRowCriticalPulse {
+  0%, 100% { background-color: rgba(239, 68, 68, 0.08); }
+  50% { background-color: rgba(239, 68, 68, 0.16); }
+}
