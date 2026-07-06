@@ -2825,3 +2825,38 @@ body, html, .app-container, .admin-root {
   0%, 100% { background-color: rgba(239, 68, 68, 0.08); }
   50% { background-color: rgba(239, 68, 68, 0.16); }
 }
+
+/* ── 4. Initial Form View Neon Upgrades ── */
+.input-section {
+  background-color: #05070f !important;
+  border: 1px solid rgba(34, 211, 238, 0.3) !important;
+  box-shadow: 0 0 15px rgba(34, 211, 238, 0.15) !important;
+}
+
+.form-group input, 
+.form-group textarea,
+.lang-selector {
+  background-color: #0a0e1a !important;
+  border: 1px solid #334155 !important;
+  color: #ffffff !important;
+}
+
+.form-group input:focus, 
+.form-group textarea:focus,
+.lang-selector:focus {
+  border-color: #22d3ee !important; /* Cyan focus border */
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.4) !important;
+  outline: none !important;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #0891b2 0%, #0891b2 100%) !important;
+  border: 1px solid #22d3ee !important;
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.3) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+.btn-primary:hover {
+  background: #06b6d4 !important;
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.6) !important;
+}
